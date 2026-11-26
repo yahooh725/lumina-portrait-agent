@@ -1,7 +1,3 @@
-<div align="center">
-
----
-
 <p align="center">
   <img src="assets/hero_comparison.jpg" alt="Lumina 拾光人像画室六工具联合精修效果对比" width="100%" />
 </p>
@@ -18,10 +14,10 @@
 
 ## 原生六工具效果实测
 
-以下均为本项目 `src/engine/` 原生算子在默认示例图上的真实渲染结果（零外部修图工具依赖）：
+以下均为本项目 `src/engine/` 原生修图工具在默认示例图上的真实渲染结果（零外部修图工具依赖）：
 
 <p align="center">
-  <img src="assets/six_tools_grid.jpg" alt="Lumina 原生六工具单算子效果对比墙" width="100%" />
+  <img src="assets/six_tools_grid.jpg" alt="Lumina 六款原生修图工具效果对比墙" width="100%" />
 </p>
 
 | 工具                                  | 典型中文说法                | 原生算法特点                                           | 缓存命中耗时（CPU） |
@@ -150,7 +146,7 @@ lumina-portrait-agent/
     ├── session/                  # 追加式树状多分支会话与无损撤销存储
     ├── tools/                    # 参数结构校验与引擎适配层
     ├── web/                      # 零依赖 Web 服务与浅色液态玻璃前端界面
-    └── tests/                    # 核心算子、树状分支与 Web API 单元测试
+    └── tests/                    # 原生工具、树状分支与 Web API 单元测试
 ```
 
 ---

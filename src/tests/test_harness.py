@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lumina 核心单元测试：覆盖树状分支会话、上下文投影、钩子幂等与原生美颜引擎算子。"""
+"""Lumina 核心单元测试：覆盖树状分支会话、上下文投影、钩子幂等与原生修图工具。"""
 from __future__ import annotations
 
 import json

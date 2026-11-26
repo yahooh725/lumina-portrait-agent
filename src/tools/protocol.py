@@ -1,9 +1,9 @@
-"""Three-channel ToolOutcome contract and executable-structure-only validator.
+"""三通道工具返回协议与结构化参数校验器。
 
-Inspired by Pi Durable's channel separation:
-- `output`: concise text returned to the LLM context
-- `structured_output`: validated machine-readable state/payload for backend logic
-- `details`: rich audit/UI telemetry (applied tools, skipped target checks, latency, argv)
+通道分离设计：
+- `output`: 返给规划模型的精简文本反馈
+- `structured_output`: 供后端状态机消费的结构化状态载荷
+- `details`: 供前端与日志展示的完整执行明细（已执行工具、跳过原因、耗时等）
 """
 from __future__ import annotations
 

@@ -1,15 +1,12 @@
-#!/usr/bin/env python3
-"""Lumina Agent local visual Web Demo powered by the unified Pi-inspired `src/` harness.
+"""Lumina 拾光人像画室：零外部框架依赖的本地可视化 Web 服务。
 
-Zero external web-framework dependencies (Python stdlib HTTP server + static HTML/JS).
-Supports three planner backends:
-  - six1800 : Frozen Qwen3-VL-2B-Instruct + 1800-sample six-tool LoRA (GPU, default)
-  - rules   : Built-in conservative rule planner + real pixel retouching (CPU)
-  - mock    : Fast CPU smoke-test mode (no GPU, no retouch subprocess)
+支持三种规划模式：
+- six1800 : Qwen3-VL-2B-Instruct + 六工具 LoRA（GPU）
+- rules   : 内置中文规则规划器 + 原生像素精修引擎（纯 CPU 可用）
+- mock    : 轻量交互演示与自动化测试模式
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
@@ -17,144 +14,74 @@ import json
 import os
 from pathlib import Path
 import re
-import sys
 import traceback
 import uuid
 
 from PIL import Image
-
-HERE = Path(__file__).resolve().parent
-BASE = HERE.parent
-ROOT = BASE.parent
-FINAL = BASE / 'final_acceptance_v1'
-STATIC_DIR = HERE / 'static'
-CANDIDATES = FINAL / 'visual_candidates/images'
-
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-if str(BASE) not in sys.path:
-    sys.path.insert(0, str(BASE))
 
 from src.agent import MockPlanner, PortraitAgent, RulePlanner, SixToolLoraPlanner
 from src.agent.planners import resolve_default_adapter, resolve_default_base_model, resolve_default_prompt
 from src.session import TreeSessionStore
 from src.tools import RetouchAdapter, TOOL_META
 
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+STATIC_DIR = HERE / 'static'
+ASSETS_DIR = ROOT / 'assets'
+
 MAX_UPLOAD = 20 * 1024 * 1024
 MAX_PIXELS = 30_000_000
 MIME = {'JPEG': ('image/jpeg', '.jpg'), 'PNG': ('image/png', '.png')}
 
-PRESETS = [
+BUILTIN_PRESETS = [
     {
-        'id': 'teeth_smile',
-        'label': '露齿微笑（推荐：多轮牙齿美白/撤销）',
-        'tag': '露齿 · CelebAMask-HQ',
-        'path': CANDIDATES / 'CelebAMask-HQ/307.jpg',
-        'suggested_prompts': [
-            '帮我美白牙齿',
-            '更明显一点',
-            '瘦脸强度调到 0.4',
-            '关掉牙齿美白',
-            '撤销上一轮',
-        ],
-    },
-    {
-        'id': 'closed_mouth_bg',
-        'label': '闭嘴人像（推荐：背景虚化 + 闭嘴跳过美白）',
-        'tag': '闭嘴 · FFHQ',
-        'path': CANDIDATES / 'FFHQ/00244.png',
-        'suggested_prompts': [
-            '帮我虚化背景',
-            '背景虚化减轻一点',
-            '帮我美白牙齿',
-            '把背景虚化关掉',
-            '回到最初',
-        ],
-    },
-    {
-        'id': 'slim_portrait',
-        'label': '人像瘦脸与大眼',
-        'tag': '五官 · CelebAMask-HQ',
-        'path': CANDIDATES / 'CelebAMask-HQ/231.jpg',
-        'suggested_prompts': [
-            '脸小点',
-            '大眼调到 0.4',
-            '瘦脸再轻一点',
-            '只保留瘦脸，大眼关掉',
-            '恢复原图',
-        ],
-    },
-    {
-        'id': 'skin_acne',
-        'label': '祛痘与磨皮组合',
-        'tag': '皮肤 · FFHQ',
-        'path': CANDIDATES / 'FFHQ/00213.png',
-        'suggested_prompts': [
-            '帮我祛痘',
-            '磨皮强度设为 0.4',
-            '祛痘敏感度调到 0.3',
-            '撤销上一步',
-        ],
-    },
-    {
-        'id': 'smooth_portrait',
-        'label': '轻度磨皮人像',
-        'tag': '磨皮 · CelebAMask-HQ',
-        'path': CANDIDATES / 'CelebAMask-HQ/245.jpg',
+        'id': 'studio_smile',
+        'label': '自然露齿人像（推荐：全套六工具体验）',
+        'tag': '内置示例 · 露齿人像',
+        'path': ASSETS_DIR / 'demo_portrait_raw.png',
         'suggested_prompts': [
             '帮我磨皮',
-            '磨皮轻一点',
-            '同时把背景虚化调到 0.5',
-            '恢复原图',
-        ],
-    },
-    {
-        'id': 'eyes_portrait',
-        'label': '大眼效果演示',
-        'tag': '眼部 · CelebAMask-HQ',
-        'path': CANDIDATES / 'CelebAMask-HQ/257.jpg',
-        'suggested_prompts': [
-            '来点大眼',
-            '大眼强度设为 0.3',
-            '撤销上一步',
+            '瘦脸调到 0.4，大眼调到 0.3',
+            '帮我虚化背景',
+            '帮我美白牙齿',
+            '撤销上一轮',
         ],
     },
 ]
 
 
-class DemoError(ValueError):
+class WebAppError(ValueError):
     pass
 
 
 def validate_image_bytes(data: bytes) -> tuple[str, str]:
     if not data or len(data) > MAX_UPLOAD:
-        raise DemoError('图片大小需在 1 字节到 20 MiB 之间')
+        raise WebAppError('图片大小需在 1 字节到 20 MiB 之间')
     try:
         with Image.open(io.BytesIO(data)) as img:
             if img.format not in MIME or img.width * img.height > MAX_PIXELS:
-                raise DemoError('仅支持 3000 万像素以内的 PNG 或 JPEG 图片')
+                raise WebAppError('仅支持 3000 万像素以内的 PNG 或 JPEG 图片')
             img.verify()
             return MIME[img.format]
     except (OSError, ValueError) as exc:
-        raise DemoError(f'无效图片文件: {exc}') from exc
+        raise WebAppError(f'无效图片文件: {exc}') from exc
 
 
 def image_media_type(path: Path) -> str:
     return 'image/png' if path.suffix.lower() == '.png' else 'image/jpeg'
 
 
-class DemoEngine:
-    """Thin HTTP-facing facade over the unified `src.agent.PortraitAgent` harness."""
+class LuminaWebApp:
+    """面向 HTTP 服务的轻量业务门面，直接驱动 PortraitAgent 与原生引擎。"""
 
-    def __init__(self, data_dir: Path, planner_mode: str = 'six1800', prompt_path: Path | None = None):
+    def __init__(self, data_dir: Path, planner_mode: str = 'rules', prompt_path: Path | None = None):
         if planner_mode not in ('six1800', 'rules', 'mock'):
-            raise ValueError('planner_mode must be six1800, rules, or mock')
+            raise ValueError('planner_mode 必须为 six1800、rules 或 mock')
         self.data_dir = Path(data_dir).resolve()
         self.uploads_dir = self.data_dir / 'uploads'
         self.sessions_dir = self.data_dir / 'sessions'
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault('PHOTO_RETOUCH_MODEL_DIR', str(ROOT / 'tool_acceptance/models'))
 
         self.planner_mode = planner_mode
         if planner_mode == 'six1800':
@@ -169,9 +96,8 @@ class DemoEngine:
 
         self.store = TreeSessionStore(self.sessions_dir)
         self.agent = PortraitAgent(store=self.store, adapter=adapter, planner=planner)
-        self._presets_by_id = {
-            item['id']: item for item in PRESETS if Path(item['path']).is_file()
-        }
+        self._presets = [item for item in BUILTIN_PRESETS if Path(item['path']).is_file()]
+        self._presets_by_id = {item['id']: item for item in self._presets}
 
     def preload(self) -> dict:
         return self.agent.planner.preload()
@@ -179,7 +105,7 @@ class DemoEngine:
     def health(self) -> dict:
         return {
             'status': 'ok',
-            'harness': 'src.agent.PortraitAgent (tree-session)',
+            'engine': 'lumina-native-v1',
             **self.agent.planner.metadata(),
             'tools': TOOL_META,
             'presets_count': len(self._presets_by_id),
@@ -194,14 +120,13 @@ class DemoEngine:
                 'thumb_url': f"/api/presets/{item['id']}/image",
                 'suggested_prompts': item['suggested_prompts'],
             }
-            for item in PRESETS
-            if item['id'] in self._presets_by_id
+            for item in self._presets
         ]
 
     def preset_path(self, preset_id: str) -> Path:
         item = self._presets_by_id.get(preset_id)
         if not item:
-            raise DemoError('未找到该示例图片')
+            raise WebAppError('未找到该示例图片')
         return Path(item['path'])
 
     def upload_image(self, data: bytes) -> dict:
@@ -217,16 +142,16 @@ class DemoEngine:
 
     def _resolve_upload(self, image_id: str) -> Path:
         if not re.fullmatch(r'up_[0-9a-f]{24}', image_id):
-            raise DemoError('无效的上传图片 ID')
+            raise WebAppError('无效的上传图片 ID')
         for ext in ('.png', '.jpg', '.jpeg'):
             candidate = self.uploads_dir / f'{image_id}{ext}'
             if candidate.is_file():
                 return candidate
-        raise DemoError('上传的图片不存在')
+        raise WebAppError('上传的图片不存在')
 
     def _validate_sid(self, sid: str) -> None:
         if not re.fullmatch(r'web_[0-9a-f]{16}', sid) or not self.store.exists(sid):
-            raise DemoError('会话不存在')
+            raise WebAppError('会话不存在')
 
     def _format_projection(self, proj: dict) -> dict:
         sid = proj['session_id']
@@ -286,12 +211,12 @@ class DemoEngine:
 
     def start_session(self, preset_id: str | None = None, image_id: str | None = None) -> dict:
         if bool(preset_id) == bool(image_id):
-            raise DemoError('请提供 preset_id 或 image_id 其中之一')
+            raise WebAppError('请提供 preset_id 或 image_id 其中之一')
         source = self.preset_path(preset_id) if preset_id else self._resolve_upload(image_id)
         try:
             proj = self.agent.init_session(source, meta={'preset_id': preset_id})
         except ValueError as exc:
-            raise DemoError(f'初始化人像分析失败：{exc}') from exc
+            raise WebAppError(f'初始化人像分析失败：{exc}') from exc
         return self._format_projection(proj)
 
     def inspect_session(self, sid: str) -> dict:
@@ -303,17 +228,17 @@ class DemoEngine:
         try:
             proj = self.agent.switch_branch(sid, leaf_id)
         except ValueError as exc:
-            raise DemoError(str(exc)) from exc
+            raise WebAppError(str(exc)) from exc
         return self._format_projection(proj)
 
     def session_image_path(self, sid: str, filename: str) -> Path:
         self._validate_sid(sid)
         folder = self.store.session_dir(sid)
         if not re.fullmatch(r'(?:original|analysis|turn_\d{3}|node_[0-9a-f]{8})\.(?:png|jpg|jpeg)', filename):
-            raise DemoError('无效的图片文件名')
+            raise WebAppError('无效的图片文件名')
         target = (folder / filename).resolve()
         if target.parent != folder.resolve() or not target.is_file():
-            raise DemoError('图片不存在')
+            raise WebAppError('图片不存在')
         return target
 
     def run_turn(
@@ -326,18 +251,18 @@ class DemoEngine:
         self._validate_sid(sid)
         text = instruction.strip() if isinstance(instruction, str) else ''
         if not 0 < len(text) <= 500:
-            raise DemoError('请输入 1–500 字的中文修图指令')
+            raise WebAppError('请输入 1–500 字的中文修图指令')
         try:
             res = self.agent.run_turn(sid, text, request_id=request_id, parent_id=parent_id)
         except ValueError as exc:
-            raise DemoError(str(exc)) from exc
+            raise WebAppError(str(exc)) from exc
         payload = self._format_projection(res['projection'])
         payload['last_events'] = res['events']
         payload['replayed'] = res['replayed']
         return payload
 
 
-def make_handler(engine: DemoEngine, token: str | None):
+def make_handler(app_engine: LuminaWebApp, token: str | None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -364,16 +289,16 @@ def make_handler(engine: DemoEngine, token: str | None):
         def _read_body(self, limit: int) -> bytes:
             raw = self.headers.get('Content-Length')
             if raw is None or not raw.isdecimal() or int(raw) > limit:
-                raise DemoError(f'请求体大小无效（上限 {limit} 字节）')
+                raise WebAppError(f'请求体大小无效（上限 {limit} 字节）')
             return self.rfile.read(int(raw))
 
         def _read_json(self) -> dict:
             try:
                 val = json.loads(self._read_body(8192).decode('utf-8'))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise DemoError(f'JSON 解析失败: {exc}') from exc
+                raise WebAppError(f'JSON 解析失败: {exc}') from exc
             if not isinstance(val, dict):
-                raise DemoError('JSON 请求体必须为对象')
+                raise WebAppError('JSON 请求体必须为对象')
             return val
 
         def _dispatch(self, method: str) -> None:
@@ -384,37 +309,37 @@ def make_handler(engine: DemoEngine, token: str | None):
                 if not self._auth_ok():
                     return
                 if method == 'GET' and path == '/api/health':
-                    return self._reply_json(200, engine.health())
+                    return self._reply_json(200, app_engine.health())
                 if method == 'GET' and path == '/api/presets':
-                    return self._reply_json(200, {'presets': engine.list_presets()})
+                    return self._reply_json(200, {'presets': app_engine.list_presets()})
                 m_preset = re.fullmatch(r'/api/presets/([a-z0-9_]+)/image', path)
                 if method == 'GET' and m_preset:
-                    img = engine.preset_path(m_preset.group(1))
+                    img = app_engine.preset_path(m_preset.group(1))
                     return self._send_bytes(200, image_media_type(img), img.read_bytes())
                 if method == 'POST' and path == '/api/upload':
                     data = self._read_body(MAX_UPLOAD)
-                    return self._reply_json(201, engine.upload_image(data))
+                    return self._reply_json(201, app_engine.upload_image(data))
                 if method == 'POST' and path == '/api/sessions':
                     body = self._read_json()
                     return self._reply_json(
-                        201, engine.start_session(body.get('preset_id'), body.get('image_id'))
+                        201, app_engine.start_session(body.get('preset_id'), body.get('image_id'))
                     )
                 m_sess = re.fullmatch(r'/api/sessions/(web_[0-9a-f]{16})', path)
                 if method == 'GET' and m_sess:
-                    return self._reply_json(200, engine.inspect_session(m_sess.group(1)))
+                    return self._reply_json(200, app_engine.inspect_session(m_sess.group(1)))
                 m_branch = re.fullmatch(r'/api/sessions/(web_[0-9a-f]{16})/branch', path)
                 if method == 'POST' and m_branch:
                     body = self._read_json()
                     if 'leaf_id' not in body:
-                        raise DemoError('leaf_id field is required')
-                    return self._reply_json(200, engine.switch_branch(m_branch.group(1), body.get('leaf_id')))
+                        raise WebAppError('缺少 leaf_id 参数')
+                    return self._reply_json(200, app_engine.switch_branch(m_branch.group(1), body.get('leaf_id')))
                 m_turn = re.fullmatch(r'/api/sessions/(web_[0-9a-f]{16})/turn', path)
                 if method == 'POST' and m_turn:
                     body = self._read_json()
                     parent_kw = {'parent_id': body['parent_id']} if 'parent_id' in body else {}
                     return self._reply_json(
                         200,
-                        engine.run_turn(
+                        app_engine.run_turn(
                             m_turn.group(1),
                             body.get('instruction', ''),
                             request_id=body.get('request_id'),
@@ -423,10 +348,10 @@ def make_handler(engine: DemoEngine, token: str | None):
                     )
                 m_img = re.fullmatch(r'/api/sessions/(web_[0-9a-f]{16})/images/([A-Za-z0-9_.-]+)', path)
                 if method == 'GET' and m_img:
-                    img = engine.session_image_path(m_img.group(1), m_img.group(2))
+                    img = app_engine.session_image_path(m_img.group(1), m_img.group(2))
                     return self._send_bytes(200, image_media_type(img), img.read_bytes())
-                return self._reply_json(404, {'error': 'route not found'})
-            except DemoError as exc:
+                return self._reply_json(404, {'error': '未找到接口路径'})
+            except WebAppError as exc:
                 return self._reply_json(400, {'error': str(exc)})
             except Exception as exc:
                 traceback.print_exc()
@@ -439,66 +364,54 @@ def make_handler(engine: DemoEngine, token: str | None):
             self._dispatch('POST')
 
         def log_message(self, fmt: str, *args) -> None:
-            print(f'[web_demo] {self.address_string()} {fmt % args}', flush=True)
+            print(f'[lumina] {self.address_string()} {fmt % args}', flush=True)
 
     return Handler
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--port', type=int, default=8787)
-    parser.add_argument('--planner', choices=['six1800', 'rules', 'mock'], default='six1800')
-    parser.add_argument('--data-dir', type=Path, default=HERE / 'runtime_demo')
-    parser.add_argument('--preload', action='store_true', help='Load six1800 LoRA on startup')
-    parser.add_argument('--preflight', action='store_true', help='Verify assets without starting server or GPU')
-    args = parser.parse_args()
+def preflight_summary(planner_mode: str) -> tuple[bool, dict]:
+    base_model = resolve_default_base_model()
+    adapter_dir = resolve_default_adapter()
+    prompt_file = resolve_default_prompt()
+    checks = {
+        'static_index': (STATIC_DIR / 'index.html').is_file(),
+        'base_model': base_model,
+        'model_dir': Path(base_model).is_dir(),
+        'adapter_weights': (adapter_dir / 'adapter_model.safetensors').is_file(),
+        'prompt': prompt_file.is_file(),
+        'presets_available': sum(1 for item in BUILTIN_PRESETS if Path(item['path']).is_file()),
+        'planner_mode': planner_mode,
+        'engine': 'lumina-native-v1',
+    }
+    ok = checks['static_index'] and checks['prompt']
+    if planner_mode == 'six1800':
+        ok = ok and checks['adapter_weights']
+    return ok, checks
 
-    if args.preflight:
-        base_model = resolve_default_base_model()
-        adapter_dir = resolve_default_adapter()
-        prompt_file = resolve_default_prompt()
-        checks = {
-            'static_index': (STATIC_DIR / 'index.html').is_file(),
-            'base_model': base_model,
-            'model_dir': Path(base_model).is_dir(),
-            'adapter_weights': (adapter_dir / 'adapter_model.safetensors').is_file(),
-            'prompt': prompt_file.is_file(),
-            'presets_available': sum(1 for item in PRESETS if Path(item['path']).is_file()),
-            'planner_mode': args.planner,
-            'harness': 'src.agent.PortraitAgent',
-            'engine': 'lumina-native-v1',
-        }
-        ok = checks['static_index'] and checks['prompt']
-        if args.planner == 'six1800':
-            ok = ok and checks['adapter_weights']
-        print(json.dumps({'status': 'ready' if ok else 'failed', **checks}, ensure_ascii=False, indent=2))
-        raise SystemExit(0 if ok else 1)
 
+def run_server(
+    host: str = '127.0.0.1',
+    port: int = 8787,
+    planner_mode: str = 'rules',
+    data_dir: Path | None = None,
+    preload: bool = False,
+) -> None:
     token = os.environ.get('PORTRAIT_DEMO_TOKEN')
-    if args.host not in ('127.0.0.1', 'localhost', '::1') and not token:
+    if host not in ('127.0.0.1', 'localhost', '::1') and not token:
         raise SystemExit('非本机地址监听请设置环境变量 PORTRAIT_DEMO_TOKEN')
 
-    engine = DemoEngine(args.data_dir, planner_mode=args.planner)
-    if args.preload and args.planner == 'six1800':
-        info = engine.preload()
-        print(json.dumps({'event': 'model_preloaded', **info}, ensure_ascii=False), flush=True)
+    runtime_dir = data_dir or (ROOT / 'runs/web_studio')
+    app_engine = LuminaWebApp(runtime_dir, planner_mode=planner_mode)
+    if preload and planner_mode == 'six1800':
+        info = app_engine.preload()
+        print(json.dumps({'event': '模型预加载完成', **info}, ensure_ascii=False), flush=True)
 
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(engine, token))
-    print(json.dumps({
-        'listening': f'http://{args.host}:{args.port}',
-        'planner_mode': args.planner,
-        'harness': 'src.agent.PortraitAgent',
-        'data_dir': str(engine.data_dir),
-        'presets': len(engine.list_presets()),
-    }, ensure_ascii=False), flush=True)
+    server = ThreadingHTTPServer((host, port), make_handler(app_engine, token))
+    print(f'\n  Lumina 拾光人像画室已启动：http://{host}:{port}')
+    print(f'  规划模式：{planner_mode} | 渲染引擎：lumina-native-v1 | 内置示例：{len(app_engine.list_presets())} 张\n', flush=True)
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
-
-
-if __name__ == '__main__':
-    main()

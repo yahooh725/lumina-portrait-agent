@@ -6,34 +6,27 @@ import json
 import os
 from pathlib import Path
 import re
-import sys
 import threading
 import time
 from typing import Callable
 
+from .rule_planner import rule_plan
+
 ROOT = Path(__file__).resolve().parents[2]
-BASE = ROOT / 'agent_baseline'
-if str(BASE) not in sys.path:
-    sys.path.insert(0, str(BASE))
-
-import app as legacy_app
-
-DEFAULT_MODEL_DIR = BASE / 'models/Qwen3-VL-2B-Instruct'
+DEFAULT_MODEL_DIR = ROOT / 'agent_baseline/models/Qwen3-VL-2B-Instruct'
 DEFAULT_ADAPTER_DIR = ROOT / 'weights/six_tool_lora_v1'
-LEGACY_ADAPTER_DIR = BASE / 'tool_expand_v1/six_tool_data_v1/train_prep_v1/sft_from_base_1800_v2/adapter'
 DEFAULT_PROMPT_PATH = ROOT / 'configs/planner_prompt.txt'
-LEGACY_PROMPT_PATH = BASE / 'tool_expand_v1/six_tool_data_v1/eval_dev280_v1/prompt_snapshot.txt'
 
 
 def resolve_default_prompt() -> Path:
-    return DEFAULT_PROMPT_PATH if DEFAULT_PROMPT_PATH.is_file() else LEGACY_PROMPT_PATH
+    return DEFAULT_PROMPT_PATH
 
 
 def resolve_default_adapter() -> Path:
     env_adapter = os.environ.get('PORTRAIT_SIX_TOOL_ADAPTER')
     if env_adapter:
         return Path(env_adapter).expanduser().resolve()
-    return (DEFAULT_ADAPTER_DIR if DEFAULT_ADAPTER_DIR.is_dir() else LEGACY_ADAPTER_DIR).resolve()
+    return DEFAULT_ADAPTER_DIR.resolve()
 
 
 def resolve_default_base_model() -> str:
@@ -92,7 +85,7 @@ class RulePlanner(BasePlanner):
 
     def plan(self, llm_context: dict, instruction: str) -> PlanResult:
         t0 = time.monotonic()
-        plan = legacy_app.rule_plan(instruction, llm_context['state'], llm_context['dialogue'])
+        plan = rule_plan(instruction, llm_context['state'], llm_context['dialogue'])
         return PlanResult(
             raw_text=json.dumps(plan, ensure_ascii=False),
             strict_json=True,
@@ -113,7 +106,7 @@ class MockPlanner(BasePlanner):
         plan = (
             self._override(llm_context, instruction)
             if self._override is not None
-            else legacy_app.rule_plan(instruction, llm_context['state'], llm_context['dialogue'])
+            else rule_plan(instruction, llm_context['state'], llm_context['dialogue'])
         )
         return PlanResult(
             raw_text=json.dumps(plan, ensure_ascii=False),

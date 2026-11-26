@@ -1,12 +1,10 @@
-"""Append-only tree-structured JSONL session store (inspired by Pi's SessionManager).
+"""追加式树状 JSONL 会话存储（支持原地分叉、多方案切换与无损撤销）。
 
-Design invariants:
-- `events.jsonl` is strictly append-only; line 1 is `session_header`, all subsequent lines are immutable `turn` nodes.
-- Each turn node has `id` and `parent_id` (None for root-level turns), forming a tree that supports
-  in-place branching without erasing earlier edit paths.
-- `head.json` atomically stores the active `leaf_id` pointer so branch switching never rewrites `events.jsonl`.
-- `convert_to_llm()` projects only clean model-facing history + open signals along the active branch,
-  filtering out UI details, timings, and closed/cancelled signals.
+设计约束：
+- `events.jsonl` 严格只追加：第 1 行为 `session_header`，后续每行为不可变 `turn` 节点。
+- 每个节点记录 `id` 与 `parent_id`，支持从任意历史节点分叉探索多套修图方案而不覆盖旧分支。
+- `head.json` 原子维护当前活跃分支叶节点指针 `leaf_id`。
+- `convert_to_llm()` 仅沿当前活跃分支投影干净的模型上下文，过滤 UI 审计与过期信号。
 """
 from __future__ import annotations
 
@@ -254,7 +252,7 @@ class TreeSessionStore:
     ) -> dict:
         """Project active branch into clean model-facing context (AgentMessage -> LLM Message boundary).
 
-        Pi-inspired projection rules (purely structural, zero Chinese keyword rules):
+        上下文投影规则（纯结构化，不依赖中文关键词硬编码）：
         1. Never leaks UI details, timing telemetry, or closed/cancelled signals into model context.
         2. Omits stale clarify/rejected turns that were already superseded by a later rendered edit.
         3. Breaks 2B greedy-decoding repetition attractors: if the same clarify question repeated

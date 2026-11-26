@@ -98,7 +98,9 @@ def check_teeth_eligibility(
 
     hsv = cv2.cvtColor(to_uint8(img_f), cv2.COLOR_BGR2HSV)
     mouth_px = inner_mouth_mask > 0.5
-    colored = (hsv[..., 1] > 110) & (hsv[..., 2] > 90)
+    # 区分暖光黄牙（色相落在 10..34 且饱和度适中）与真正的高饱和彩色异物遮挡（如奶嘴/吸管）
+    non_tooth_hue = (hsv[..., 0] < 10) | (hsv[..., 0] > 34)
+    colored = (hsv[..., 2] > 90) & (((hsv[..., 1] > 115) & non_tooth_hue) | (hsv[..., 1] > 175))
     colored_fraction = float(colored[mouth_px].mean()) if mouth_px.any() else 0.0
     suspected_occlusion = colored_fraction > 0.30
 

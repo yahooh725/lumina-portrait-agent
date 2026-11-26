@@ -1,4 +1,4 @@
-# ===== Python 缓存与构建产物 =====
+# ===== Python 缓存与运行目录 =====
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,77 +8,31 @@ __pycache__/
 .ruff_cache/
 .venv/
 .env
-
-# ===== 本地虚拟环境与大模型权重（体积过大，不纳入仓库） =====
-.conda-env/
-.conda-pkgs/
-.conda-pkgs:
-tool_acceptance/
-models/
-agent_baseline/models/
 runs/
 logs/
 *.log
 *.exit_code
 
-# ===== 原始数据集、个人自拍与外部参考源码（隐私、版权与体积限制） =====
+# ===== 本地虚拟环境、基座模型与原始数据集（本地保留，不上传 GitHub） =====
+.conda-env/
+.conda-pkgs/
+models/
 data/
+tool_acceptance/
 ref/
 vendor/
 
-# ===== 运行期会话、用户上传照片与个人隐私资料 =====
-agent_baseline/demo_showcase_v1/runtime_demo/
-agent_baseline/demo_showcase_v1/resume_package/
-agent_baseline/demo_showcase_v1/portfolio_showcase.html
-agent_baseline/demo_showcase_v1/portfolio_assets/
-agent_baseline/demo_showcase_v1/build_portfolio.py
-
-# ===== 内部协作交接与求职文档（仅本地留存，不对外公开） =====
+# ===== 内部实验目录与过程文档（本地保留，仅公开干净产品源码） =====
+agent_baseline/
+docs/
+examples/
+tools/
 岗位JD.md
 任务todo.md
 AGENTS.md
 PACKAGE_MANIFEST.json
 参考仓库说明.md
 项目说明.md
-tools/verify_package.py
-docs/服务器开始这里.md
-docs/进度记录.md
-docs/项目进展与协作交接_2026-11-24.md
-
-# ===== 历史中间实验目录与原始日志产物（本地保留，不污染开源仓库） =====
-agent_baseline/dataset_prep/
-agent_baseline/dataset_audit/
-agent_baseline/annotation/
-agent_baseline/holdout_baseline/
-agent_baseline/visual_acceptance_v1/
-agent_baseline/engineering_upgrade_v1/
-agent_baseline/final_acceptance_v1/
-agent_baseline/service_v1/
-agent_baseline/validator_boundary_v1/
-agent_baseline/runs/
-agent_baseline/logs/
-agent_baseline/acne_all_report.md
-agent_baseline/new_images_*.md
-agent_baseline/run_new_images_qwen.sh
-agent_baseline/switch_torch_cuda.sh
-agent_baseline/prepare_model.sh
-agent_baseline/smoke_test.py
-agent_baseline/qwen_planner.py
-agent_baseline/README.md
-agent_baseline/tool_expand_v1/runs/
-agent_baseline/tool_expand_v1/direct_closed_teeth.*
-agent_baseline/tool_expand_v1/smoke*
-agent_baseline/tool_expand_v1/qwen_planner_v2.py
-agent_baseline/tool_expand_v1/six_tool_data_v1/
-agent_baseline/tool_expand_v1/six_tool_data_v2/sft_from_base_1968_v1/
-agent_baseline/tool_expand_v1/six_tool_data_v2/eval_v2_results/
-agent_baseline/tool_expand_v1/six_tool_data_v2/train_plan_only_1968.jsonl
-agent_baseline/tool_expand_v1/six_tool_data_v2/targeted_add_168.jsonl
-agent_baseline/tool_expand_v1/six_tool_data_v2/train_manifest_v2.json
-agent_baseline/tool_expand_v1/six_tool_data_v2/targeted_samples_review.md
-agent_baseline/tool_expand_v1/six_tool_data_v2/regression_multiturn_12.jsonl
-agent_baseline/tool_expand_v1/six_tool_data_v2/launch_train_and_eval_v2.sh
-agent_baseline/tool_expand_v1/six_tool_data_v2/prompt_snapshot.txt
 
 # ===== 操作系统临时文件 =====
 .DS_Store

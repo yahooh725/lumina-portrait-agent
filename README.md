@@ -1,83 +1,56 @@
-# Lumina 拾光人像画室
+<div align="center">
 
-基于 **Qwen3-VL-2B + 语言侧 LoRA**、**树状会话 Agent 内核** 与 **原生高速人像精修引擎** 构建的中文单人人像对话修图系统。
+# Lumina · 拾光人像画室
 
-上传任意单人人像，用自然中文连续下达修图意图（如「帮我磨皮」「瘦脸调到 0.4」「背景虚化轻一点」「回到第 1 轮试试大眼」），系统将自动完成多模态语义规划、结构校验、原图重渲染、多方案分支对比与无损撤销，严格保持未提及参数不被误改。
+**用一句自然中文，完成专业级单人人像精修**
 
----
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Engine](https://img.shields.io/badge/精修引擎-原生六工具高速渲染-2B6CE0?style=flat-square)](#原生六工具效果实测)
+[![Model](https://img.shields.io/badge/多模态规划-Qwen3--VL--2B%20%2B%20LoRA-6366F1?style=flat-square)](weights/six_tool_lora_v1/README.md)
+[![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
 
-## 核心特性
+上传人像 · 自然中文连续微调 · 原图重渲染 · 多分支方案对比 · 一键无损撤销
 
-### 1. 原生六工具高速人像精修引擎（`src/engine/`）
-完全自研封装的进程内人像精修管线，内置持久化 MediaPipe 478 点人脸网格与多类人像分割，**按原图 SHA256 自动缓存解析结果**，多轮交互零子进程冷启动开销（单轮缓存命中渲染约 **0.18s–0.51s**）：
-
-| 工具标识 | 中文名称 | 原生算法设计要点 |
-| --- | --- | --- |
-| `slim_face` | 瘦脸 | 6 对渐进式面颊/下颌轮廓点向中轴牵引，内置下巴、双耳、嘴角三重保护场与雅可比防撕裂约束 |
-| `enlarge_eyes` | 大眼 | 沿内外眼角主轴构造旋转椭圆放大位移场，对眉弓施加柔和衰减保护，告别生硬圆球感 |
-| `remove_acne` | 祛痘 | Lab 空间红度/暗度稳健 z-score 异常检测、非线性敏感度与显著度上限防误报，局部 ROI Telea 修补 + 微纹理回填 |
-| `smooth_skin` | 磨皮 | CIE Lab 双层高低频分离，亮度与色度通道分别保边平滑并自适应回填毛孔细节，严格保护五官清晰度 |
-| `blur_bg` | 背景虚化 | 原图灰度引导细化人像 Alpha 掩码（发丝贴合）+ 归一化卷积散景模糊，彻底消除边缘溢色光晕 |
-| `whiten_teeth` | 牙齿美白 | 严格露齿可见性门控（开口比 + 嘴内异物遮挡筛查，闭嘴自动跳过）+ Lab 去黄温和提亮 |
-
-> **原图重渲染机制**：每一轮调整均基于原始无损图片 + 当前完整激活参数一次性重新渲染，避免反复重采样或多次磨皮导致的画质累积劣化。
-
-### 2. 树状 Agent 内核（`src/`）
-参考轻量 Agent Harness 架构思想实现，兼顾可审计性、可控性与多方案探索：
-
-- **追加式树状会话（`TreeSessionStore`）**：以 `id` / `parent_id` 节点记录在 `events.jsonl` 中，支持从任意历史节点原地分叉派生方案 A / B / C，一键切换对比，撤销全程无损。
-- **三通道工具协议（`ToolOutcome`）**：将发给模型的极简反馈、写回程序的状态快照、展示给前端的完整审计明细彻底分流，避免底层耗时与路径信息污染大模型上下文。
-- **上下文投影降噪（`convert_to_llm`）**：仅沿当前活跃分支投影干净对话历史，并自动折叠卡死的连续重复澄清，不依赖硬编码中文关键词规则替代模型理解。
-- **钩子屏障与幂等保护**：支持 `before_tool_call` / `after_tool_call` 拦截扩展与 `request_id` 幂等重放。
-
-### 3. 「拾光人像画室」可视化 Web Demo
-零外部 Web 框架依赖（纯 Python 标准库 HTTP 服务 + 零 CDN 原生前端）：
-
-- **画室式浅色液态玻璃界面**：支持「晨光 / 暖瓷」双光影氛围切换、实时自动提取当前人像 4 枚主色调色卡、可编辑作品署名。
-- **专业对比工具**：原图/结果水晶滑块对比、并排对比、纯净结果视图、按住 `Space` 瞬时看原图、`Ctrl+Z` 快捷撤销、2.5× 双镜局部放大镜与一键导出高清水印对比卡。
-- **多分支胶片时间线 & 统一助手面板**：点击底部任意历史缩略图即可原地分叉探索不同修图风格；右侧融合式对话助手实时呈现六工具状态 Diff、原始 JSON 计划与执行/跳过审计。
+</div>
 
 ---
 
-## 架构概览
+<p align="center">
+  <img src="assets/hero_comparison.jpg" alt="Lumina 拾光人像画室六工具联合精修效果对比" width="100%" />
+</p>
 
-```text
-用户中文指令 ──▶ PortraitAgent (src/agent/harness.py)
-                   ├── convert_to_llm() 树状分支上下文投影 (src/session/tree_store.py)
-                   ├── SixToolLoraPlanner / RulePlanner (src/agent/planners.py)
-                   ├── 纯结构化 Schema 校验与状态合并 (src/tools/protocol.py)
-                   ├── before / after 工具钩子屏障 & 露齿可见性门控
-                   └── RetouchAdapter ──▶ LuminaRetouchEngine (src/engine/)
-                                             ├── analyzer.py (持久化检测 + SHA256 缓存)
-                                             ├── skin.py     (防伪影祛痘 + Lab 高低频磨皮)
-                                             ├── optics.py   (无光晕散景虚化 + 自然牙齿美白)
-                                             └── geometry.py (连续瘦脸 + 旋转椭圆大眼)
-```
+## 为什么选择 Lumina？
 
-更多架构演进与工程设计细节见 [Pi 借鉴与架构演进](docs/pi借鉴与架构演进.md) 与 [工具接口与状态规范](docs/工具接口与状态.md)。
+- **像聊天一样修图**：直接说「帮我磨皮」「瘦脸调到 0.4」「背景虚化轻一点」「回到第 1 轮试试大眼」，精准执行你的意图，**绝不误改未提及的参数**。
+- **原生高速精修引擎（零第三方修图脚本依赖）**：自研六工具像素管线，支持按图缓存人脸与人像分割结果，**单轮微调低至 0.08s–0.45s**，告别反复卡顿。
+- **自然通透，拒绝假面感**：Lab 双层高低频磨皮保留真实毛孔、纹理保真局部祛痘无圆形贴片、旋转椭圆大眼保护眉形、引导细化抠图消除背景虚化白边、露齿门控闭嘴自动跳过美牙。
+- **多分支探索与无损撤销**：从任意历史步骤原地分叉，派生「自然通勤版 / 质感大片版」等多套修图方案并一键切换对比，每一轮均基于原图重渲染，画质零劣化。
+- **开箱即用**：纯 Python 标准库 + 零 CDN 浅色液态玻璃 Web 画室，**有 GPU 可运行内置 Qwen3-VL 六工具 LoRA，无 GPU 也可直接用规则规划 + 原生引擎实时出图**。
 
 ---
 
-## 实验评测摘要
+## 原生六工具效果实测
 
-仓库内置已训练好的 **3.1 MB 六工具语言侧 LoRA 权重**（基于 `Qwen3-VL-2B-Instruct`，冻结视觉编码器，语言侧 `q_proj`/`v_proj` rank 4，80.3 万可训练参数，1800 条多模态图像+状态+历史→JSON 计划样本微调 1 epoch）：
+以下均为本项目 `src/engine/` 原生算子在默认示例图上的真实渲染结果（零外部修图工具依赖）：
 
-| 评测项 | 评测口径 | 实测结果 |
-| --- | --- | --- |
-| **开发集规划准确率（`dev280`）** | 280 条六工具计划诊断开发集 | 原生底座 **60.7%（170/280）** → 四工具 LoRA **88.6%（248/280）** → 六工具 LoRA **90.7%（254/280）** |
-| **端到端计划到出图** | 24 张新图 / 48 轮完整多轮会话 | **21/24 会话成功**，**48/48 纯 JSON 输出**，闭嘴美白门控 1/1 准确跳过 |
-| **模型规划延迟（暖机）** | 单张 GPU 推理 | P50 约 **1.14 秒** |
-| **原生引擎渲染耗时（CPU）** | 缓存命中多轮重渲染 | 单/双工具约 **0.18 秒**，五工具联合渲染约 **0.51 秒**（相比外部子进程冷启动提速 30× 以上） |
+<p align="center">
+  <img src="assets/six_tools_grid.jpg" alt="Lumina 原生六工具单算子效果对比墙" width="100%" />
+</p>
 
-> 注：仓库同时保留了 v2 受控定向补训脚本（`agent_baseline/tool_expand_v1/six_tool_data_v2/`），该对照实验在 `dev280` 达 255/280 但因 `new80` 略低于门禁（74/80）而未替换正式权重，当前默认启用综合表现最稳健的 v1 六工具 LoRA 权重。
+| 工具 | 典型中文说法 | 原生算法特点 | 缓存命中耗时（CPU） |
+| --- | --- | --- | --- |
+| **祛痘** (`remove_acne`) | 帮我祛痘 / 祛痘敏感度 0.6 | Lab 红暗异常检测 + 显著度防误报 + 局部纹理保真修补 | ~0.16s |
+| **磨皮** (`smooth_skin`) | 帮我磨皮 / 磨皮轻一点 | CIE Lab 高低频分离，平滑色斑泛红并自适应保留毛孔与五官 | ~0.14s |
+| **牙齿美白** (`whiten_teeth`) | 帮我美白牙齿 / 牙齿再白一点 | 严格露齿与遮挡门控（闭嘴自动跳过）+ Lab 自然去黄提亮 | ~0.10s |
+| **瘦脸** (`slim_face`) | 脸小点 / 瘦脸调到 0.4 | 6 对渐进下颌轮廓牵引 + 下巴/双耳/嘴角保护 + 防撕裂约束 | ~0.08s |
+| **大眼** (`enlarge_eyes`) | 来点大眼 / 大眼 0.35 | 沿眼轴旋转椭圆放大 + 眉弓柔和保护，自然有神不凸眼 | ~0.07s |
+| **背景虚化** (`blur_bg`) | 帮我虚化背景 / 虚化 0.7 | 原图灰度引导细化人像边缘 + 归一化卷积散景，无边缘光晕 | ~0.22s |
 
 ---
 
-## 快速开始
+## 30 秒快速开始
 
-### 1. 环境准备
-
-建议使用 Python 3.10–3.12：
+### 1. 安装依赖（推荐 Python 3.10–3.12）
 
 ```bash
 git clone https://github.com/yahooh725/lumina-portrait-agent.git
@@ -85,91 +58,131 @@ cd lumina-portrait-agent
 pip install -r requirements.txt
 ```
 
-### 2. 一键体验（无需 GPU）
-
-- **规则规划 + 原生像素引擎实时精修**（首次运行将自动下载轻量 MediaPipe 模型至本地缓存，或通过 `LUMINA_VISION_MODEL_DIR` 指定离线目录）：
+### 2. 一键启动「拾光人像画室」
 
 ```bash
-PORTRAIT_DEMO_PLANNER=rules bash agent_baseline/demo_showcase_v1/launch_web_demo.sh
+python3 app.py
 ```
 
-- **纯 CPU 交互冒烟模式**（零模型依赖，立即体验界面、滑块对比与分支树）：
+启动后在浏览器打开 **`http://127.0.0.1:8787`** 即可直接使用（已内置免版权示例人像，也支持随时上传本地单人照片）。
+
+#### 常用启动模式
 
 ```bash
-PORTRAIT_DEMO_PLANNER=mock bash agent_baseline/demo_showcase_v1/launch_web_demo.sh
+# 纯 CPU 模式（无需显卡，中文规则规划 + 原生六工具实时像素精修）
+python3 app.py --mode rules
+
+# GPU 多模态大模型模式（Qwen3-VL-2B + 内置 3.1MB 六工具 LoRA 权重）
+PORTRAIT_BASE_MODEL=Qwen/Qwen3-VL-2B-Instruct python3 app.py --mode lora --gpu 0
+
+# 指定端口启动
+python3 app.py --port 8787
+
+# 环境自检（不启动服务）
+python3 app.py --preflight
 ```
 
-启动后在浏览器打开 `http://127.0.0.1:8787`，直接点击左侧「上传本地单人人像」即可开始修图。
+> 首次运行原生视觉检测时会自动下载轻量 MediaPipe 模型至本地缓存；离线环境可通过环境变量 `LUMINA_VISION_MODEL_DIR` 指定本地模型目录。
 
-### 3. 启动完整多模态 LoRA 版本（需要 GPU）
+---
 
-将 `Qwen/Qwen3-VL-2B-Instruct` 下载至 `agent_baseline/models/Qwen3-VL-2B-Instruct`（或直接通过环境变量指定 Hugging Face 模型 ID / 本地路径），仓库已内置对应的六工具 LoRA 权重：
+## 工作流程一览
 
-```bash
-PORTRAIT_BASE_MODEL=Qwen/Qwen3-VL-2B-Instruct \
-PORTRAIT_GPU_ID=0 \
-PORTRAIT_DEMO_PORT=8787 \
-bash agent_baseline/demo_showcase_v1/launch_web_demo.sh
+```mermaid
+flowchart LR
+    A[上传单人人像] --> B[人像解析与缓存<br/>478关键点 / 皮肤与前景分割 / 露齿检测]
+    B --> C[输入中文修图指令]
+    C --> D{语义规划器<br/>Qwen3-VL LoRA / 规则规划}
+    D -->|update / undo / reset| E[结构校验与状态合并<br/>未提及参数严格不变]
+    D -->|clarify| H[向用户发起澄清]
+    E --> F[原生六工具引擎<br/>基于原图一次性重渲染]
+    F --> G[树状会话存档<br/>滑块对比 / 2.5×放大镜 / 分支切换 / 导出对比卡]
+    G -->|继续微调或从历史节点分叉| C
 ```
 
-### 4. 独立调用原生修图引擎 CLI
+### Web 画室快捷操作
+
+- **画室光影氛围**：顶栏右上角可一键切换「**晨光** / **暖瓷**」浅色画室主题，中间自动提取当前照片的 **4 枚主色调色卡**，点击作品标题可直接自定义署名。
+- **精细比对工具**：支持**滑块对比 / 并排对比 / 纯净结果**三视图、按住 `Space` 瞬时看原图、`Ctrl+Z` 撤销上一步、**2.5× 双镜局部放大镜**以及一键导出对比卡。
+- **分支对比怎么玩**：连续修图几轮后，点击底部胶片时间线中的**任意早期轮次**，直接输入新指令即可自动派生「方案 B」，随时在方案 A / B 间无损切换比较。
+
+---
+
+## 命令行与 Python SDK 用法
+
+除了 Web 界面，也可以直接将原生精修引擎集成到你自己的脚本或服务中：
+
+### 命令行（CLI）
 
 ```bash
-# 分析人像关键点与露齿状态
-python3 -m src.engine analyze /path/to/portrait.jpg
+# 1. 分析人像关键点、瑕疵数与露齿状态
+python3 -m src.engine analyze assets/demo_portrait_raw.png
 
-# 从原图按参数直接渲染
-python3 -m src.engine edit /path/to/portrait.jpg -o out.png \
-  --slim-face 0.4 --enlarge-eyes 0.3 --smooth-skin 0.4 --blur-bg 0.5
+# 2. 一行命令完成多工具联合精修
+python3 -m src.engine edit assets/demo_portrait_raw.png -o output.png \
+  --remove-acne 0.65 --smooth-skin 0.45 --slim-face 0.45 \
+  --enlarge-eyes 0.35 --blur-bg 0.72 --whiten-teeth 0.72
 ```
 
-### 5. 运行单元测试与接口冒烟测试
+### Python 代码调用
 
-```bash
-# 树状会话、分支切换、三通道返回、钩子屏障、原生引擎算子单测
-python3 src/tests/test_harness.py
+```python
+from src.engine import LuminaRetouchEngine
 
-# Web Demo HTTP 接口与多轮分支流程冒烟测试
-python3 agent_baseline/demo_showcase_v1/smoke_test_demo.py
+engine = LuminaRetouchEngine()
+
+# 同图多次调用自动命中缓存，单次渲染 < 0.5s
+result, meta = engine.edit(
+    "assets/demo_portrait_raw.png",
+    "output.png",
+    remove_acne=0.65,
+    smooth_skin_strength=0.45,
+    slim_face=0.45,
+    enlarge_eyes=0.35,
+    blur_bg=0.72,
+    whiten_teeth_strength=0.72,
+)
+print("已执行:", result["applied"], "耗时:", meta["seconds"], "s")
 ```
 
 ---
 
-## 目录结构
+## 项目结构
 
 ```text
-portrait-agent/
-├── README.md                          # 项目说明（纯中文）
-├── LICENSE                            # MIT 开源协议
-├── requirements.txt                   # Python 依赖清单
-├── configs/                           # 工具注册表、计划 JSON Schema、规划提示词与环境变量示例
-├── docs/                              # 架构演进、工具接口规范、数据训练与评测文档
-├── examples/                          # 结构化操作计划设计样例
-├── weights/
-│   └── six_tool_lora_v1/              # 内置 3.1MB 六工具 LoRA 权重（开箱即用）
-├── src/
-│   ├── engine/                        # Lumina 原生六工具高速人像精修引擎
-│   │   ├── analyzer.py                # 持久化 MediaPipe 检测与按图缓存
-│   │   ├── geometry.py                # 连续轮廓瘦脸 + 旋转椭圆大眼 + 防折叠保护
-│   │   ├── skin.py                    # 防伪影自适应祛痘 + Lab 高低频磨皮
-│   │   ├── optics.py                  # 引导细化散景虚化 + 露齿门控牙齿美白
-│   │   └── pipeline.py                # 统一进程内管线与 CLI 入口
-│   ├── agent/                         # PortraitAgent 调度内核与可插拔规划器
-│   ├── session/                       # 追加式树状 JSONL 会话存储与上下文投影
-│   ├── tools/                         # 协议校验与原生引擎三通道适配层
-│   └── tests/                         # 核心单元测试
-└── agent_baseline/
-    ├── app.py                         # 规则规划与基础校验模块
-    ├── demo_showcase_v1/              # 「拾光人像画室」可视化 Web Demo 与启动脚本
-    └── tool_expand_v1/six_tool_data_v2/ # LoRA 微调与门禁评测参考脚本
+lumina-portrait-agent/
+├── app.py                        # 一键启动入口（支持 auto / lora / rules / mock 模式）
+├── requirements.txt              # Python 依赖清单
+├── LICENSE                       # MIT 开源协议
+├── assets/                       # 内置示例人像与效果展示图
+├── configs/                      # 六工具注册表、计划 Schema、规划提示词与环境变量模板
+├── weights/six_tool_lora_v1/     # 开箱即用的 3.1MB 六工具语言侧 LoRA 权重
+└── src/
+    ├── engine/                   # 原生六工具高速人像精修引擎（检测缓存 / 几何 / 肤质 / 光学）
+    ├── agent/                    # 对话调度内核、LoRA 规划器与内置中文规则规划器
+    ├── session/                  # 追加式树状多分支会话与无损撤销存储
+    ├── tools/                    # 参数结构校验与引擎适配层
+    ├── web/                      # 零依赖 Web 服务与浅色液态玻璃前端界面
+    └── tests/                    # 核心算子、树状分支与 Web API 单元测试
 ```
 
 ---
 
-## 致谢与许可
+## 运行测试
+
+```bash
+# 核心树状会话、钩子屏障与原生美颜引擎单元测试
+python3 src/tests/test_harness.py
+
+# Web 工作室 HTTP API 与多分支流程冒烟测试
+python3 src/tests/test_web_api.py
+```
+
+---
+
+## 致谢与协议
 
 - 多模态基座模型：[Qwen3-VL-2B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct)
-- 人脸关键点与语义分割视觉基础模型：[MediaPipe Tasks](https://developers.google.com/mediapipe)
-- 树状会话与轻量 Agent Harness 架构启发：[pi](https://github.com/earendil-works/pi)
+- 人脸关键点与语义分割基础模型：[MediaPipe Tasks](https://developers.google.com/mediapipe)
 
-本项目代码基于 [MIT License](LICENSE) 开源。使用第三方基座模型或公开人像数据集进行二次训练与部署时，请遵守各自对应的许可证要求。
+本项目代码基于 [MIT License](LICENSE) 开源，欢迎 Star、Issue 与 PR！

@@ -1,1 +1,1 @@
-"""Unified portrait-agent core package (Pi-inspired minimal harness)."""
+"""Lumina 拾光人像画室核心内核包。"""

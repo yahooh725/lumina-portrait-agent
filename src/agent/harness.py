@@ -1,4 +1,4 @@
-"""Pi-inspired minimal PortraitAgent harness with event streaming, hooks, and Commit-Before-Show."""
+"""Lumina 核心调度引擎 `PortraitAgent`：支持事件流、工具钩子屏障、幂等提交与先落盘后展示。"""
 from __future__ import annotations
 
 import copy

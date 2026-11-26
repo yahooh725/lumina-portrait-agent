@@ -1,0 +1,121 @@
+{
+  "version": "draft-0.2-six-tool-prototype",
+  "status": "runtime_prototype_in_agent_baseline",
+  "scope": "single_image_single_person",
+  "calibration_status": "four_sample_exploration_complete_not_final",
+  "initial_state": {
+    "slim_face": {
+      "enabled": false,
+      "strength": 0.0
+    },
+    "enlarge_eyes": {
+      "enabled": false,
+      "strength": 0.0
+    },
+    "remove_acne": {
+      "enabled": false,
+      "sensitivity": 0.5
+    },
+    "smooth_skin": {
+      "enabled": false,
+      "strength": 0.0
+    },
+    "blur_bg": {
+      "enabled": false,
+      "strength": 0.0
+    },
+    "whiten_teeth": {
+      "enabled": false,
+      "strength": 0.0
+    }
+  },
+  "tools": [
+    {
+      "name": "slim_face",
+      "label": "瘦脸",
+      "cli_flag": "--slim-face",
+      "parameter": "strength",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "不是整个头部缩小；可能影响轮廓附近背景"
+    },
+    {
+      "name": "enlarge_eyes",
+      "label": "大眼",
+      "cli_flag": "--enlarge-eyes",
+      "parameter": "strength",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "内部强度不是眼睛放大百分比"
+    },
+    {
+      "name": "remove_acne",
+      "label": "祛痘",
+      "cli_flag": "--remove-acne",
+      "parameter": "sensitivity",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "0仍是有效敏感度；关闭必须enabled=false"
+    },
+    {
+      "name": "smooth_skin",
+      "label": "磨皮",
+      "cli_flag": "--smooth-skin",
+      "parameter": "strength",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "需要检查皮肤细节与眼唇区域误改"
+    },
+    {
+      "name": "blur_bg",
+      "label": "背景虚化",
+      "cli_flag": "--blur-bg",
+      "parameter": "strength",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "背景分割边缘需目视复核"
+    },
+    {
+      "name": "whiten_teeth",
+      "label": "牙齿美白",
+      "cli_flag": "--whiten-teeth",
+      "parameter": "strength",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "disabled_behavior": "omit_cli_flag",
+      "note": "须有可确认露齿目标，否则跳过"
+    }
+  ],
+  "program_managed_actions": [
+    "analyze",
+    "compare",
+    "state_merge",
+    "undo",
+    "reset"
+  ],
+  "future_tools_not_exposed_in_v1": [
+    "brighten",
+    "warmth",
+    "tint",
+    "skin_glow",
+    "contour",
+    "define_eyes",
+    "even_neck",
+    "soften_neck",
+    "match_skin",
+    "slim_body",
+    "taller",
+    "liquify",
+    "heal"
+  ],
+  "rendering": {
+    "source": "original_image",
+    "order": "fixed_order_consistent_with_upstream",
+    "rule": "validate_plan_then_merge_then_render_then_commit_session_if_success"
+  }
+}

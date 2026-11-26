@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Portrait Agent operation plan (design draft)",
+  "description": "Structure only; runtime checks still required for semantics, duplicate tools, and scene availability.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action",
+    "updates",
+    "question"
+  ],
+  "properties": {
+    "action": {
+      "enum": [
+        "update",
+        "undo",
+        "reset",
+        "clarify"
+      ]
+    },
+    "updates": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tool",
+              "enabled",
+              "strength"
+            ],
+            "properties": {
+              "tool": {
+                "enum": [
+                  "slim_face",
+                  "enlarge_eyes",
+                  "smooth_skin",
+                  "blur_bg",
+                  "whiten_teeth"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "strength": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "enabled": {
+                      "const": false
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "strength": {
+                      "const": 0
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tool",
+              "enabled",
+              "sensitivity"
+            ],
+            "properties": {
+              "tool": {
+                "const": "remove_acne"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "sensitivity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "question": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "update"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "updates": {
+            "minItems": 1
+          },
+          "question": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "undo",
+              "reset"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "updates": {
+            "maxItems": 0
+          },
+          "question": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "clarify"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "updates": {
+            "maxItems": 0
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# 核心运行依赖（原生六工具精修引擎 + 树状 Agent 内核 + Web Demo）
+numpy>=1.24.0
+opencv-python>=4.9.0
+Pillow>=10.0.0
+mediapipe>=0.10.14
+
+# 多模态规划模型依赖（启用 Qwen3-VL-2B + LoRA GPU 推理或训练时安装）
+torch>=2.4.0
+transformers>=4.50.0
+peft>=0.14.0
+accelerate>=1.0.0
+safetensors>=0.4.0
+huggingface-hub>=0.25.0

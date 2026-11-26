@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina Agent · 智能人像修图工作室</title>
+<style>
+  :root {
+    --bg-base: #f4f7fb;
+    --ink: #141923;
+    --ink-soft: #4c576c;
+    --ink-muted: #8490a7;
+    --glass: rgba(255, 255, 255, 0.70);
+    --glass-border: rgba(255, 255, 255, 0.92);
+    --accent: #3678ff;
+    --accent-soft: rgba(54, 120, 255, 0.11);
+    --mint: #128e62;
+    --amber: #b86c0c;
+    --rose: #cc3b55;
+    --shadow-card: 0 16px 44px rgba(18, 34, 68, 0.068), 0 2px 8px rgba(18, 34, 68, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+    --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background: var(--bg-base);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Bright studio ambient refractive backdrop (supports Daylight & Warm Porcelain moods) */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background:
+      radial-gradient(1100px 700px at 6% -6%, rgba(164, 208, 255, 0.44), transparent 60%),
+      radial-gradient(920px 680px at 94% 4%, rgba(255, 214, 228, 0.40), transparent 58%),
+      radial-gradient(960px 720px at 50% 108%, rgba(196, 226, 255, 0.44), transparent 60%),
+      linear-gradient(180deg, #f8fafd 0%, #eef3f9 100%);
+    transition: background 0.5s ease;
+  }
+  body.mood-warm .ambient {
+    background:
+      radial-gradient(1100px 700px at 8% -6%, rgba(255, 224, 192, 0.50), transparent 60%),
+      radial-gradient(920px 680px at 92% 6%, rgba(252, 214, 210, 0.42), transparent 58%),
+      radial-gradient(960px 720px at 50% 108%, rgba(242, 232, 214, 0.55), transparent 62%),
+      linear-gradient(180deg, #fcfaf6 0%, #f5efe6 100%);
+  }
+  body.mood-warm .canvas-frame {
+    background: linear-gradient(180deg, rgba(255, 253, 249, 0.96) 0%, rgba(249, 244, 236, 0.90) 100%);
+  }
+  .ambient::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.65) 1px, transparent 1px);
+    background-size: 26px 26px;
+    opacity: 0.34;
+  }
+
+  .app-shell {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 14px 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 100vh;
+  }
+  @media (min-width: 1181px) {
+    body { overflow-y: hidden; }
+    .app-shell { height: 100vh; }
+  }
+
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(26px) saturate(190%);
+    -webkit-backdrop-filter: blur(26px) saturate(190%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Liquid Glass Button System */
+  .liquid-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 15px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+    text-decoration: none;
+    cursor: pointer;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.94);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.90) 0%, rgba(242, 246, 253, 0.62) 100%);
+    backdrop-filter: blur(18px) saturate(200%);
+    -webkit-backdrop-filter: blur(18px) saturate(200%);
+    box-shadow:
+      0 6px 18px rgba(25, 45, 90, 0.075),
+      0 1.5px 3px rgba(25, 45, 90, 0.045),
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.98),
+      inset 0 -2px 4px rgba(130, 160, 215, 0.16);
+    transition: transform 0.24s var(--spring), box-shadow 0.24s var(--spring), background 0.22s ease, border-color 0.22s ease, color 0.2s ease;
+    isolation: isolate;
+    user-select: none;
+  }
+  .liquid-btn::before {
+    content: "";
+    position: absolute;
+    left: 10%; right: 10%; top: 2px; height: 46%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .liquid-btn::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: radial-gradient(110px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.78), transparent 62%);
+    opacity: 0;
+    transition: opacity 0.22s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .liquid-btn > * { position: relative; z-index: 1; }
+  .liquid-btn:hover:not(:disabled) {
+    transform: translateY(-1.5px);
+    box-shadow:
+      0 11px 26px rgba(34, 68, 140, 0.12),
+      0 2px 6px rgba(34, 68, 140, 0.06),
+      inset 0 1.5px 1px #fff,
+      inset 0 -2px 5px rgba(96, 140, 255, 0.22);
+  }
+  .liquid-btn:hover:not(:disabled)::after { opacity: 1; }
+  .liquid-btn:active:not(:disabled), .liquid-btn.pressed {
+    transform: translateY(0.5px) scale(0.96);
+    box-shadow: 0 3px 10px rgba(25, 45, 90, 0.08), inset 0 2px 5px rgba(100, 130, 190, 0.18);
+  }
+  .liquid-btn:disabled { opacity: 0.40; cursor: not-allowed; transform: none; }
+
+  .liquid-btn.primary {
+    color: #fff;
+    border-color: rgba(164, 202, 255, 0.82);
+    background: linear-gradient(180deg, rgba(84, 144, 255, 0.94) 0%, rgba(48, 110, 250, 0.88) 100%);
+    box-shadow:
+      0 10px 24px rgba(54, 120, 255, 0.30),
+      inset 0 1.5px 1px rgba(255, 255, 255, 0.65),
+      inset 0 -2px 6px rgba(15, 52, 160, 0.30);
+  }
+  .liquid-btn.primary::before { background: linear-gradient(180deg, rgba(255,255,255,0.46), transparent); }
+  .liquid-btn.primary::after { background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,0.38), transparent 62%); }
+
+  .liquid-btn.toggled {
+    color: var(--accent);
+    border-color: rgba(114, 164, 255, 0.72);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(232,242,255,0.92) 100%);
+    box-shadow: 0 6px 18px rgba(54, 120, 255, 0.16), inset 0 1.5px 1px #fff;
+  }
+  .liquid-btn.sm { padding: 6px 12px; font-size: 12.5px; }
+  .liquid-btn.icon-send { width: 36px; height: 36px; padding: 0; font-size: 16px; flex-shrink: 0; }
+
+  /* Floating Editorial Atelier Header (A + B) */
+  header {
+    position: relative;
+    z-index: 20;
+    border-radius: 22px;
+    padding: 9px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+  }
+  @media (max-width: 960px) {
+    header { grid-template-columns: 1fr; justify-items: start; }
+  }
+  .atelier-brand { display: flex; align-items: center; gap: 11px; }
+  .aperture-mark {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(242,244,248,0.78) 100%);
+    border: 1px solid rgba(255,255,255,0.98);
+    box-shadow: 0 5px 14px rgba(20, 32, 58, 0.08), inset 0 1px 1px #fff;
+    display: grid; place-items: center; color: #2b3446; flex-shrink: 0;
+  }
+  .atelier-name {
+    font-family: Georgia, "Times New Roman", "Songti SC", "Noto Serif SC", serif;
+    font-size: 20px; font-weight: 600; letter-spacing: 0.03em; color: var(--ink); line-height: 1;
+  }
+  .atelier-divider { width: 1px; height: 15px; background: rgba(20, 25, 35, 0.14); }
+  .atelier-sub { font-size: 12px; color: var(--ink-soft); letter-spacing: 0.06em; font-weight: 400; }
+
+  /* Center: Live Portrait Palette + Editable Artwork Signature */
+  .atelier-center {
+    display: inline-flex;
+    align-items: center;
+    gap: 11px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.56);
+    border: 1px solid rgba(255, 255, 255, 0.90);
+    box-shadow: inset 0 1px 0 #fff, 0 3px 10px rgba(20, 35, 68, 0.035);
+  }
+  .palette-strip { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.96);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+    transition: transform 0.25s var(--spring), background-color 0.45s ease;
+  }
+  .swatch:hover { transform: scale(1.28); }
+  .center-sep { width: 1px; height: 12px; background: rgba(20, 25, 35, 0.12); }
+  .artwork-title-input {
+    border: none; background: transparent; outline: none;
+    font-family: Georgia, "Songti SC", "Noto Serif SC", serif;
+    font-size: 13px; font-weight: 500; color: var(--ink);
+    width: 148px; text-align: center; padding: 2px 6px; border-radius: 8px;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+  }
+  .artwork-title-input:hover { background: rgba(255, 255, 255, 0.65); }
+  .artwork-title-input:focus { background: rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 1.5px rgba(84,144,255,0.35); }
+  .dim-badge { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Right: Studio Mood Toggle + Discreet Atelier Info Popover */
+  .atelier-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; position: relative; }
+  .mood-pill {
+    display: inline-flex; padding: 3px; border-radius: 999px;
+    background: rgba(226, 233, 245, 0.52); border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow: inset 0 1px 2px rgba(20, 35, 68, 0.05);
+  }
+  .mood-btn {
+    border: none; background: transparent; padding: 4px 11px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer;
+    transition: all 0.22s var(--spring);
+  }
+  .mood-btn.active {
+    background: linear-gradient(180deg, #fff 0%, #f6f8fc 100%);
+    color: var(--ink); font-weight: 600;
+    box-shadow: 0 3px 9px rgba(20, 35, 68, 0.09), inset 0 1px 0 #fff;
+  }
+  .info-trigger { width: 32px; height: 32px; padding: 0; font-family: Georgia, serif; font-style: italic; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+  .info-popover {
+    position: absolute; top: calc(100% + 10px); right: 0; width: 296px;
+    border-radius: 18px; padding: 14px 15px; display: none; flex-direction: column; gap: 8px;
+    background: rgba(255, 255, 255, 0.90); backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.98);
+    box-shadow: 0 20px 48px rgba(18, 34, 68, 0.14), inset 0 1px 0 #fff;
+    z-index: 50; font-size: 12px; color: var(--ink-soft);
+  }
+  .info-popover.open { display: flex; }
+  .info-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .info-k { color: var(--ink-muted); }
+  .info-v { color: var(--ink); font-weight: 500; text-align: right; }
+
+  /* Studio Grid: equal-height 3 columns aligned top & bottom */
+  .studio {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 236px minmax(430px, 1fr) 410px;
+    gap: 15px;
+    align-items: stretch;
+    transition: grid-template-columns 0.34s var(--spring);
+  }
+  .studio.sidebar-collapsed {
+    grid-template-columns: 68px minmax(430px, 1fr) 410px;
+  }
+  @media (max-width: 1180px) {
+    .studio, .studio.sidebar-collapsed { grid-template-columns: 1fr; }
+  }
+
+  .panel { border-radius: 24px; padding: 15px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; min-height: 0; height: 100%; }
+  .section-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .section-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-muted); margin: 0; white-space: nowrap; }
+
+  /* Left Portrait Picker & Collapsed Glass Rail */
+  .sidebar-toggle { width: 30px; height: 30px; padding: 0; font-size: 14px; flex-shrink: 0; }
+  .upload-trigger { width: 100%; padding: 9px 14px; white-space: nowrap; }
+  .upload-trigger .short-ico { display: none; font-size: 16px; line-height: 1; }
+  .preset-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 2px; }
+  .preset-card {
+    display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.86); background: rgba(255, 255, 255, 0.56);
+    cursor: pointer; text-align: left; color: var(--ink);
+    transition: transform 0.22s var(--spring), background 0.2s, box-shadow 0.22s, border-color 0.2s, padding 0.22s;
+  }
+  .preset-card:hover { background: rgba(255, 255, 255, 0.90); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(20, 35, 68, 0.06); }
+  .preset-card.active { background: rgba(255, 255, 255, 0.98); border-color: rgba(84, 144, 255, 0.65); box-shadow: 0 8px 22px rgba(54, 120, 255, 0.13), inset 0 1px 0 #fff; }
+  .preset-card img { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; flex-shrink: 0; box-shadow: 0 3px 8px rgba(15, 23, 42, 0.10); transition: width 0.25s var(--spring), height 0.25s var(--spring); }
+  .preset-meta { min-width: 0; overflow: hidden; }
+  .preset-title { font-size: 12px; font-weight: 600; line-height: 1.32; }
+  .preset-tag { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+
+  .studio.sidebar-collapsed .left-sidebar { padding: 12px 10px; align-items: center; }
+  .studio.sidebar-collapsed .left-sidebar .section-row { justify-content: center; width: 100%; }
+  .studio.sidebar-collapsed .left-sidebar .section-label,
+  .studio.sidebar-collapsed .left-sidebar .preset-meta,
+  .studio.sidebar-collapsed .left-sidebar .sidebar-footnote,
+  .studio.sidebar-collapsed .left-sidebar .full-label { display: none; }
+  .studio.sidebar-collapsed .left-sidebar .upload-trigger { width: 44px; height: 44px; padding: 0; }
+  .studio.sidebar-collapsed .left-sidebar .upload-trigger .short-ico { display: inline; }
+  .studio.sidebar-collapsed .left-sidebar .preset-list { align-items: center; padding-right: 0; width: 100%; }
+  .studio.sidebar-collapsed .left-sidebar .preset-card { padding: 3px; border-radius: 14px; justify-content: center; }
+  .studio.sidebar-collapsed .left-sidebar .preset-card img { width: 40px; height: 40px; border-radius: 11px; }
+
+  /* Center Gallery Stage */
+  .stage-panel { border-radius: 26px; padding: 14px 17px 15px; display: flex; flex-direction: column; gap: 11px; min-height: 0; height: 100%; overflow: hidden; }
+  .stage-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+
+  .segmented {
+    position: relative; display: inline-flex; padding: 4px; border-radius: 999px;
+    background: rgba(224, 233, 248, 0.58); border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow: inset 0 1px 3px rgba(20, 35, 68, 0.06);
+  }
+  .seg-thumb {
+    position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238,245,255,0.92) 100%);
+    border: 1px solid #fff;
+    box-shadow: 0 5px 14px rgba(25, 45, 90, 0.11), inset 0 1.5px 1px #fff, inset 0 -1.5px 3px rgba(54,120,255,0.12);
+    transition: transform 0.36s var(--spring), width 0.36s var(--spring);
+    pointer-events: none; z-index: 0;
+  }
+  .seg-btn {
+    position: relative; z-index: 1; background: transparent; border: none; padding: 6px 14px;
+    border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .seg-btn.active { color: var(--ink); font-weight: 600; }
+  .actions-row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+
+  .canvas-frame {
+    flex: 1; min-height: 280px; border-radius: 20px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,249,254,0.88) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.96);
+    box-shadow: inset 0 1px 4px rgba(20, 35, 68, 0.04);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; padding: 14px;
+  }
+  .empty-state { text-align: center; max-width: 340px; color: var(--ink-muted); font-size: 14px; }
+  .empty-orb {
+    width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 22px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(212,229,255,0.72));
+    border: 1px solid #fff;
+    box-shadow: 0 12px 28px rgba(54, 120, 255, 0.14), inset 0 1.5px 2px #fff;
+    display: grid; place-items: center; font-size: 24px; color: var(--accent);
+  }
+
+  @keyframes revealGlow {
+    0% { opacity: 0.72; filter: brightness(1.06); }
+    100% { opacity: 1; filter: brightness(1); }
+  }
+  .reveal-anim { animation: revealGlow 0.45s var(--spring); }
+
+  /* Interactive Split Slider & Loupe */
+  .compare-wrap {
+    position: relative; display: inline-block; max-width: 100%; max-height: calc(100vh - 305px);
+    user-select: none; line-height: 0; border-radius: 16px; overflow: visible;
+    box-shadow: 0 22px 52px rgba(15, 28, 56, 0.12), 0 4px 12px rgba(15, 28, 56, 0.06);
+  }
+  .compare-media { position: relative; border-radius: 16px; overflow: hidden; line-height: 0; }
+  .compare-wrap img { display: block; max-width: 100%; max-height: calc(100vh - 305px); width: auto; height: auto; }
+  .compare-overlay { position: absolute; inset: 0; overflow: hidden; }
+  .compare-overlay img { width: 100%; height: 100%; object-fit: contain; }
+  .compare-divider {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: rgba(255, 255, 255, 0.96); box-shadow: 0 0 14px rgba(15, 23, 42, 0.28); pointer-events: none;
+  }
+  .compare-handle {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(235,244,255,0.76) 100%);
+    backdrop-filter: blur(14px) saturate(200%); -webkit-backdrop-filter: blur(14px) saturate(200%);
+    border: 1.5px solid #fff;
+    box-shadow: 0 8px 22px rgba(15, 28, 56, 0.22), inset 0 1.5px 1px #fff;
+    color: var(--ink); font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 4;
+  }
+  .compare-range { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0; z-index: 5; }
+  .compare-wrap.loupe-active .compare-range { pointer-events: none; }
+  .compare-wrap.loupe-active { cursor: crosshair; }
+
+  .loupe-lens {
+    position: absolute; width: 172px; height: 172px; border-radius: 50%;
+    pointer-events: none; display: none; overflow: hidden; z-index: 8;
+    border: 2.5px solid rgba(255, 255, 255, 0.96);
+    box-shadow: 0 16px 38px rgba(15, 28, 56, 0.28), 0 0 0 1px rgba(54, 120, 255, 0.22), inset 0 2px 3px rgba(255,255,255,0.9);
+    transform: translate(-50%, -50%); background: #fff;
+  }
+  .loupe-half { position: absolute; top: 0; bottom: 0; width: 50%; background-repeat: no-repeat; }
+  .loupe-left { left: 0; border-right: 1.5px solid rgba(255,255,255,0.95); }
+  .loupe-right { right: 0; }
+  .loupe-cap {
+    position: absolute; bottom: 7px; font-size: 9.5px; font-weight: 600;
+    padding: 2px 6px; border-radius: 999px; background: rgba(255,255,255,0.86); color: var(--ink);
+  }
+  .loupe-cap.l { left: 10px; }
+  .loupe-cap.r { right: 10px; }
+
+  .corner-tag {
+    position: absolute; bottom: 12px; padding: 5px 11px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 500; color: var(--ink);
+    background: rgba(255, 255, 255, 0.84); backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.10); pointer-events: none;
+  }
+  .corner-tag.left { left: 12px; }
+  .corner-tag.right { right: 12px; }
+
+  .hold-badge {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: rgba(255, 255, 255, 0.92); border: 1px solid #fff;
+    box-shadow: 0 8px 24px rgba(15, 28, 56, 0.15);
+    color: var(--accent); display: none; z-index: 9; pointer-events: none;
+  }
+  .hold-badge.show { display: inline-flex; align-items: center; gap: 6px; }
+
+  .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; }
+  .side-by-side figure { margin: 0; text-align: center; }
+  .side-by-side img { max-width: 100%; max-height: 56vh; border-radius: 14px; box-shadow: 0 14px 34px rgba(15, 28, 56, 0.10); }
+  .side-by-side figcaption { font-size: 12px; color: var(--ink-muted); margin-top: 7px; }
+
+  /* Filmstrip & Telemetry */
+  .stage-footer { display: flex; flex-direction: column; gap: 8px; }
+  .filmstrip { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 3px 2px; }
+  .film-pill {
+    display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 5px;
+    border-radius: 999px; border: 1px solid rgba(255,255,255,0.92); background: rgba(255,255,255,0.64);
+    cursor: pointer; font-size: 11.5px; color: var(--ink-soft); flex-shrink: 0;
+    transition: all 0.2s var(--spring);
+  }
+  .film-pill:hover { background: rgba(255,255,255,0.94); transform: translateY(-1px); }
+  .film-pill.active {
+    background: linear-gradient(180deg, #fff 0%, #eaf2ff 100%);
+    border-color: rgba(84,144,255,0.65); color: var(--ink); font-weight: 600;
+    box-shadow: 0 4px 12px rgba(54,120,255,0.14);
+  }
+  .film-pill img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+
+  .telemetry-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    padding: 6px 12px; border-radius: 14px;
+    background: rgba(255, 255, 255, 0.56); border: 1px solid rgba(255, 255, 255, 0.88);
+    font-size: 11.5px; color: var(--ink-soft);
+  }
+  .pipe-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pipe-chip {
+    padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(15,23,42,0.06); font-variant-numeric: tabular-nums;
+  }
+  .pipe-chip.done { color: var(--mint); border-color: rgba(18,142,98,0.22); }
+  .pipe-chip.warn { color: var(--amber); border-color: rgba(184,108,12,0.24); }
+
+  /* Right Column: Compact 6-tool Status + Unified Gemini-style Assistant Chat */
+  .right-col { display: flex; flex-direction: column; gap: 13px; min-height: 0; height: 100%; }
+  .status-card { border-radius: 22px; padding: 13px 15px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+  .tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .tool-tile {
+    padding: 7px 9px; border-radius: 13px;
+    background: rgba(255, 255, 255, 0.56); border: 1px solid rgba(255, 255, 255, 0.88);
+    transition: all 0.25s var(--spring);
+  }
+  .tool-tile.on {
+    background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(235,244,255,0.90) 100%);
+    border-color: rgba(110, 162, 255, 0.58);
+    box-shadow: 0 5px 14px rgba(54, 120, 255, 0.10), inset 0 1px 0 #fff;
+  }
+  .tool-tile.changed { box-shadow: 0 7px 18px rgba(54, 120, 255, 0.18), 0 0 0 1.5px rgba(54, 120, 255, 0.28); }
+  .tool-tile.skipped {
+    border-color: rgba(232, 155, 45, 0.55);
+    background: linear-gradient(180deg, rgba(255,252,245,0.96), rgba(255,244,224,0.88));
+  }
+  .tool-top { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 5px; gap: 4px; }
+  .tool-val { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--ink-muted); font-weight: 500; }
+  .tool-tile.on .tool-val { color: var(--accent); font-weight: 700; }
+  .delta-pill {
+    display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 600;
+    padding: 1px 6px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+  .delta-pill.up { background: rgba(54, 120, 255, 0.12); color: var(--accent); }
+  .delta-pill.off { background: rgba(15, 23, 42, 0.08); color: var(--ink-soft); }
+  .delta-pill.skip { background: rgba(232, 155, 45, 0.18); color: var(--amber); }
+  .track { height: 4px; border-radius: 999px; background: rgba(15, 23, 42, 0.07); overflow: hidden; }
+  .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5c98ff, #3678ff); transition: width 0.28s var(--spring); }
+
+  /* Unified Gemini-style Chat Component (stretches to exact bottom of 3-column grid) */
+  .chat-card {
+    flex: 1;
+    min-height: 0;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (max-width: 1180px) {
+    .chat-card { min-height: 460px; max-height: 70vh; }
+  }
+  .chat-header {
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.42);
+  }
+  .chat-persona { display: flex; align-items: center; gap: 9px; }
+  .spark-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #4b8bff 0%, #8cb7ff 55%, #f2b4d4 100%);
+    box-shadow: 0 4px 12px rgba(75, 139, 255, 0.28), inset 0 1px 2px rgba(255,255,255,0.85);
+    display: grid; place-items: center; color: #fff; font-size: 13px; flex-shrink: 0;
+  }
+  .spark-avatar.sm { width: 24px; height: 24px; font-size: 11px; margin-top: 2px; }
+  .chat-title { font-size: 13.5px; font-weight: 650; color: var(--ink); }
+  .chat-sub { font-size: 11px; color: var(--ink-muted); }
+
+  .chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 15px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  /* User Message Bubble (Right-aligned, Gemini pill style) */
+  .msg-user-row {
+    display: flex;
+    justify-content: flex-end;
+    padding-left: 34px;
+  }
+  .msg-user-bubble {
+    background: linear-gradient(180deg, rgba(227, 239, 255, 0.94) 0%, rgba(215, 232, 255, 0.84) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.96);
+    color: var(--ink);
+    padding: 9px 14px;
+    border-radius: 18px 18px 5px 18px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    box-shadow: 0 5px 16px rgba(54, 120, 255, 0.09), inset 0 1px 0 #fff;
+    word-break: break-word;
+  }
+
+  /* Assistant Message Block (Left-aligned, Gemini open editorial style) */
+  .msg-ai-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 16px;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+    cursor: pointer;
+  }
+  .msg-ai-row:hover { background: rgba(255, 255, 255, 0.50); }
+  .msg-ai-row.inspecting {
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 6px 18px rgba(54, 120, 255, 0.09), inset 0 0 0 1px rgba(100, 154, 255, 0.35);
+  }
+  .msg-ai-row.static-msg { cursor: default; }
+  .msg-ai-row.static-msg:hover { background: transparent; }
+
+  .msg-ai-body { flex: 1; min-width: 0; }
+  .msg-ai-text {
+    font-size: 13.5px;
+    line-height: 1.62;
+    color: var(--ink);
+    word-break: break-word;
+  }
+  .msg-ai-text.warn-text { color: #8c5206; }
+  .msg-ai-text.err-text { color: var(--rose); }
+
+  .msg-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .mini-pill {
+    font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.86); border: 1px solid rgba(15, 23, 42, 0.07);
+    color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  }
+  .mini-pill.ok { background: rgba(18, 142, 98, 0.10); border-color: rgba(18, 142, 98, 0.18); color: var(--mint); }
+  .mini-pill.warn { background: rgba(232, 155, 45, 0.14); border-color: rgba(232, 155, 45, 0.24); color: var(--amber); }
+  .mini-pill.bad { background: rgba(204, 59, 85, 0.11); border-color: rgba(204, 59, 85, 0.20); color: var(--rose); }
+
+  .audit-toggle { margin-top: 6px; }
+  .audit-toggle summary {
+    cursor: pointer; font-size: 11.5px; color: var(--ink-muted); list-style: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .audit-toggle summary:hover { color: var(--accent); }
+  .audit-pre {
+    margin: 6px 0 0; padding: 8px 10px; border-radius: 10px;
+    background: rgba(240, 245, 252, 0.94); border: 1px solid rgba(15, 23, 42, 0.06);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #2c3a55;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* Gemini-style pulsing thinking dots */
+  .thinking-dots { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; vertical-align: middle; }
+  .thinking-dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.35;
+    animation: pulseDot 1.2s infinite ease-in-out;
+  }
+  .thinking-dots i:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulseDot {
+    0%, 80%, 100% { transform: scale(0.75); opacity: 0.3; }
+    40% { transform: scale(1.15); opacity: 1; }
+  }
+
+  /* Sticky Bottom Composer inside the unified chat card */
+  .chat-footer {
+    padding: 10px 14px 13px;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    background: linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.76) 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .chips-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .chips-scroll::-webkit-scrollbar { display: none; }
+  .chip { padding: 4px 10px; font-size: 11.5px; flex-shrink: 0; }
+
+  .branch-hint {
+    font-size: 11.5px; color: var(--accent); font-weight: 500;
+    display: none; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 4px 10px; border-radius: 10px; background: rgba(54, 120, 255, 0.08);
+  }
+  .branch-hint.show { display: flex; }
+
+  .composer {
+    display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 15px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94); border: 1px solid rgba(255, 255, 255, 1);
+    box-shadow: 0 8px 22px rgba(20, 35, 68, 0.075), inset 0 1px 2px rgba(20, 35, 68, 0.04);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .composer:focus-within {
+    border-color: rgba(84, 144, 255, 0.75);
+    box-shadow: 0 10px 26px rgba(54, 120, 255, 0.16);
+  }
+  .composer input {
+    flex: 1; border: none; background: transparent; color: var(--ink); font-size: 13.5px; outline: none; min-width: 0;
+  }
+  .composer input::placeholder { color: var(--ink-muted); }
+
+  /* Loading overlay on canvas */
+  .spinner {
+    position: absolute; inset: 0;
+    background: rgba(246, 249, 254, 0.72);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 11px; z-index: 12;
+  }
+  .spinner.show { display: flex; }
+  .loader-ring {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid rgba(54, 120, 255, 0.18); border-top-color: var(--accent);
+    animation: spin 0.85s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .subtle-note { font-size: 11px; color: var(--ink-muted); margin: 0; line-height: 1.45; }
+  .kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px;
+    padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(15,23,42,0.12); color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<div class="app-shell">
+  <header class="glass">
+    <div class="atelier-brand">
+      <div class="aperture-mark" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <circle cx="12" cy="12" r="3.4"></circle>
+          <path d="M12 3l2.6 5.6M20.2 8.2l-6.1.4M19.2 17.5l-4.2-4.6M12 21l-2.6-5.6M3.8 15.8l6.1-.4M4.8 6.5l4.2 4.6"></path>
+        </svg>
+      </div>
+      <span class="atelier-name">Lumina</span>
+      <span class="atelier-divider"></span>
+      <span class="atelier-sub">拾光人像画室</span>
+    </div>
+
+    <div class="atelier-center" title="实时提取当前人像主色调 · 点击标题可修改导出落款">
+      <div class="palette-strip" id="paletteStrip">
+        <span class="swatch" style="background:#e8d8cc" title="底片色卡"></span>
+        <span class="swatch" style="background:#d9c4b8" title="底片色卡"></span>
+        <span class="swatch" style="background:#b9c9dc" title="底片色卡"></span>
+        <span class="swatch" style="background:#7d8ca1" title="底片色卡"></span>
+      </div>
+      <span class="center-sep"></span>
+      <input class="artwork-title-input" id="artworkTitle" type="text" value="人像习作 · No.01" maxlength="24" aria-label="作品名称">
+      <span class="dim-badge" id="dimBadge">等待选片</span>
+    </div>
+
+    <div class="atelier-right">
+      <div class="mood-pill" title="切换画室环境光氛围">
+        <button class="mood-btn active" id="moodDaylight" onclick="setStudioMood('daylight')">晨光</button>
+        <button class="mood-btn" id="moodWarm" onclick="setStudioMood('warm')">暖瓷</button>
+      </div>
+      <button class="liquid-btn info-trigger" id="btnAtelierInfo" onclick="toggleInfoPopover(event)" title="画室与引擎信息"><span>i</span></button>
+      <div class="info-popover" id="infoPopover">
+        <div style="font-weight:650;color:var(--ink);font-size:12.5px;margin-bottom:2px;">画室暗房铭牌</div>
+        <div class="info-row"><span class="info-k">规划引擎</span><span class="info-v" id="infoEngine">连接中...</span></div>
+        <div class="info-row"><span class="info-k">露齿检测</span><span class="info-v" id="infoTeeth">选片后自动分析</span></div>
+        <div class="info-row"><span class="info-k">渲染方式</span><span class="info-v">原图无损重渲染</span></div>
+        <div class="info-row"><span class="info-k">历史管理</span><span class="info-v">树状多分支 · 可回溯</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="studio" id="studioGrid">
+    <!-- Left: Collapsible Portrait selector -->
+    <aside class="panel glass left-sidebar">
+      <div class="section-row">
+        <p class="section-label">人像样本</p>
+        <button class="liquid-btn sidebar-toggle" id="btnToggleSidebar" onclick="toggleSidebar()" title="折叠 / 展开左侧参考图栏"><span>‹</span></button>
+      </div>
+      <label class="liquid-btn upload-trigger" title="上传本地单人人像">
+        <input type="file" id="uploadInput" accept="image/png,image/jpeg" style="display:none">
+        <span class="full-label">＋ 上传本地单人人像</span>
+        <span class="short-ico">＋</span>
+      </label>
+      <div class="preset-list" id="presetList"></div>
+      <p class="subtle-note sidebar-footnote">快捷键：按住 <span class="kbd">Space</span> 看原图 · <span class="kbd">Ctrl+Z</span> 撤销上一步。</p>
+    </aside>
+
+    <!-- Center: Hero portrait canvas -->
+    <main class="stage-panel glass">
+      <div class="stage-bar">
+        <div class="segmented" id="modeSegmented">
+          <div class="seg-thumb" id="segThumb"></div>
+          <button id="modeSlider" class="seg-btn active" onclick="setViewMode('slider')">滑块对比</button>
+          <button id="modeSide" class="seg-btn" onclick="setViewMode('side')">并排对比</button>
+          <button id="modeResult" class="seg-btn" onclick="setViewMode('result')">纯净结果</button>
+        </div>
+        <div class="actions-row">
+          <button id="btnHoldOrig" class="liquid-btn sm" disabled title="按住查看原图（或按住 Space）"><span>👁 按住看原图</span></button>
+          <button id="btnLoupe" class="liquid-btn sm" disabled onclick="toggleLoupe()" title="开启 2.5× 左右同步局部放大镜"><span>🔍 局部放大</span></button>
+          <button id="btnUndo" class="liquid-btn sm" disabled onclick="sendInstruction('撤销上一轮')"><span>↶ 撤销</span></button>
+          <button id="btnReset" class="liquid-btn sm" disabled onclick="sendInstruction('恢复原图')"><span>↺ 原图</span></button>
+          <button id="btnExportCard" class="liquid-btn sm" disabled onclick="exportShowcaseCard()" title="一键合成高颜值原图/结果对比卡"><span>⬇ 对比卡</span></button>
+        </div>
+      </div>
+
+      <div class="canvas-frame" id="canvasFrame">
+        <div class="hold-badge" id="holdBadge">👁 正在预览原图（松开返回）</div>
+        <div class="spinner" id="loadingMask">
+          <div class="loader-ring"></div>
+          <div id="loadingText" style="font-size:14px;font-weight:600;color:var(--ink)">正在规划与重渲染...</div>
+          <div class="pipe-steps" style="font-size:11.5px;color:var(--ink-soft);">
+            <span class="pipe-chip">① VLM 规划</span>→<span class="pipe-chip">② 白名单 & 露齿门控</span>→<span class="pipe-chip">③ 原图重渲染</span>
+          </div>
+        </div>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-orb">✦</div>
+          <div style="font-size:15.5px;font-weight:650;color:var(--ink);margin-bottom:6px;">欢迎来到 Lumina Agent</div>
+          <div>从左侧挑选示例照片或上传单人人像，即可与右侧修图助手自然对话。</div>
+        </div>
+        <div id="viewerContent" style="display:none;width:100%;text-align:center;"></div>
+      </div>
+
+      <div class="stage-footer" id="stageFooter" style="display:none;">
+        <div class="filmstrip" id="branchBar" style="display:none;"></div>
+        <div class="filmstrip" id="filmstrip"></div>
+        <div class="telemetry-bar" id="telemetryBar"></div>
+      </div>
+    </main>
+
+    <!-- Right: Compact 6-tool Status + Unified Gemini-style Chat Assistant -->
+    <section class="right-col">
+      <div class="status-card glass">
+        <div class="section-row">
+          <p class="section-label">六工具实时状态</p>
+          <span id="historyHint" style="font-size:11px;color:var(--accent);font-weight:600;display:none;"></span>
+        </div>
+        <div class="tools-grid" id="statePanel"></div>
+      </div>
+
+      <div class="chat-card glass">
+        <div class="chat-header">
+          <div class="chat-persona">
+            <div class="spark-avatar">✦</div>
+            <div>
+              <div class="chat-title">Lumina 修图助手</div>
+              <div class="chat-sub" id="chatSub">请先在左侧选择或上传照片</div>
+            </div>
+          </div>
+          <span class="mini-pill" id="turnCountPill">待开始</span>
+        </div>
+
+        <div class="chat-stream" id="chatStream">
+          <div class="msg-ai-row static-msg">
+            <div class="spark-avatar sm">✦</div>
+            <div class="msg-ai-body">
+              <div class="msg-ai-text">
+                你好，我是 <strong>Lumina 修图助手</strong>。支持自然中文调节<strong>瘦脸、大眼、祛痘、磨皮、背景虚化、牙齿美白</strong>，并可随时撤销、重置或从历史节点分叉对比方案。<br><br>
+                请先在左侧挑选示例人像或上传你的单人照片开始。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-footer">
+          <div class="branch-hint" id="branchHint">
+            <span id="branchHintText">⎇ 将从当前历史节点分叉出新方案</span>
+            <button class="liquid-btn sm" style="padding:2px 9px;font-size:11px;" onclick="returnToLatest()"><span>回到最新</span></button>
+          </div>
+          <div class="chips-scroll" id="promptChips"></div>
+          <div class="composer">
+            <input id="instructionInput" type="text" placeholder="告诉 Lumina 你想怎么修图..." disabled>
+            <button class="liquid-btn primary icon-send" id="btnSend" disabled onclick="submitInput()" title="发送指令（Enter）"><span>↑</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+let currentSession = null;
+let presetsCache = [];
+let viewMode = 'slider';
+let sliderPos = 50;
+let activePresetId = null;
+let loupeEnabled = false;
+let holdingOriginal = false;
+let previewTurnIndex = null;
+let pendingUserMessage = null; // Optimistic user bubble while model is thinking
+let sessionCounter = 0;
+
+const TOOL_LABELS = {
+  slim_face: '瘦脸', enlarge_eyes: '大眼', remove_acne: '祛痘',
+  smooth_skin: '磨皮', blur_bg: '背景虚化', whiten_teeth: '牙齿美白'
+};
+
+function setStudioMood(mood) {
+  const warm = mood === 'warm';
+  document.body.classList.toggle('mood-warm', warm);
+  document.getElementById('moodDaylight').classList.toggle('active', !warm);
+  document.getElementById('moodWarm').classList.toggle('active', warm);
+  try { localStorage.setItem('lumina_studio_mood', mood); } catch (_) {}
+}
+
+function toggleInfoPopover(e) {
+  e.stopPropagation();
+  document.getElementById('infoPopover').classList.toggle('open');
+}
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('infoPopover');
+  if (pop && pop.classList.contains('open') && !e.target.closest('.atelier-right')) {
+    pop.classList.remove('open');
+  }
+});
+
+// Extract 4 harmonious real colors + image dimensions from the active portrait via canvas
+function updatePortraitPalette(imgUrl) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const dim = document.getElementById('dimBadge');
+    if (dim) dim.textContent = `${img.naturalWidth} × ${img.naturalHeight}`;
+    try {
+      const c = document.createElement('canvas');
+      c.width = 48; c.height = 48;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 48, 48);
+      const data = ctx.getImageData(0, 0, 48, 48).data;
+      // Sample 4 representative regions: upper-left bg, face center, cheek/skin, lower accent
+      const zones = [
+        [2, 2, 16, 16],
+        [16, 14, 16, 16],
+        [20, 24, 14, 12],
+        [8, 34, 32, 12]
+      ];
+      const colors = zones.map(([zx, zy, zw, zh]) => {
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let y = zy; y < zy + zh; y++) {
+          for (let x = zx; x < zx + zw; x++) {
+            const idx = (y * 48 + x) * 4;
+            r += data[idx]; g += data[idx + 1]; b += data[idx + 2]; n++;
+          }
+        }
+        const rr = Math.round(r / n), gg = Math.round(g / n), bb = Math.round(b / n);
+        return '#' + [rr, gg, bb].map(v => v.toString(16).padStart(2, '0')).join('');
+      });
+      const strip = document.getElementById('paletteStrip');
+      if (strip) {
+        strip.innerHTML = colors.map(hex => `<span class="swatch" style="background:${hex}" title="当前人像色卡 ${hex.toUpperCase()}"></span>`).join('');
+      }
+    } catch (_) {}
+  };
+  img.src = imgUrl;
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Liquid Glass pointer specular highlight tracking
+document.addEventListener('pointermove', (e) => {
+  const btn = e.target.closest('.liquid-btn');
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  btn.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+  btn.style.setProperty('--my', (e.clientY - r.top) + 'px');
+});
+
+function syncSegThumb() {
+  const container = document.getElementById('modeSegmented');
+  const thumb = document.getElementById('segThumb');
+  const active = container ? container.querySelector('.seg-btn.active') : null;
+  if (!container || !thumb || !active) return;
+  thumb.style.width = active.offsetWidth + 'px';
+  thumb.style.transform = `translateX(${active.offsetLeft - 4}px)`;
+}
+window.addEventListener('resize', syncSegThumb);
+
+function setLoading(show, text) {
+  document.getElementById('loadingMask').classList.toggle('show', show);
+  if (text) document.getElementById('loadingText').textContent = text;
+  const busy = show || !currentSession;
+  ['instructionInput', 'btnSend', 'btnReset', 'btnHoldOrig', 'btnLoupe', 'btnExportCard'].forEach(id => {
+    document.getElementById(id).disabled = busy;
+  });
+  document.getElementById('btnUndo').disabled = busy || !(currentSession && currentSession.can_undo);
+}
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+function applySidebarState(collapsed) {
+  const grid = document.getElementById('studioGrid');
+  const btn = document.getElementById('btnToggleSidebar');
+  if (!grid || !btn) return;
+  grid.classList.toggle('sidebar-collapsed', collapsed);
+  btn.innerHTML = collapsed ? '<span>›</span>' : '<span>‹</span>';
+  btn.title = collapsed ? '展开左侧参考图栏' : '折叠左侧参考图栏';
+  try { localStorage.setItem('lumina_sidebar_collapsed', collapsed ? '1' : '0'); } catch (_) {}
+  setTimeout(syncSegThumb, 360);
+}
+
+function toggleSidebar() {
+  const grid = document.getElementById('studioGrid');
+  applySidebarState(!grid.classList.contains('sidebar-collapsed'));
+}
+
+async function boot() {
+  try {
+    if (localStorage.getItem('lumina_sidebar_collapsed') === '1') applySidebarState(true);
+    if (localStorage.getItem('lumina_studio_mood') === 'warm') setStudioMood('warm');
+  } catch (_) {}
+  syncSegThumb();
+  const health = await api('/api/health');
+  const map = {
+    six1800: 'Qwen3-VL-2B · 六工具 LoRA 1800',
+    rules: '规则规划器 · CPU 实渲染',
+    mock: '快速离线冒烟模式'
+  };
+  document.getElementById('infoEngine').textContent = map[health.planner_mode] || health.planner_mode;
+  renderState(null, health.tools, null, []);
+
+  const pData = await api('/api/presets');
+  presetsCache = pData.presets || [];
+  document.getElementById('presetList').innerHTML = presetsCache.map(p => `
+    <button class="preset-card" id="preset-${esc(p.id)}" onclick="startPreset('${esc(p.id)}')" title="${esc(p.label)}（${esc(p.tag)}）">
+      <img src="${esc(p.thumb_url)}" alt="${esc(p.label)}">
+      <div class="preset-meta">
+        <div class="preset-title">${esc(p.label)}</div>
+        <div class="preset-tag">${esc(p.tag)}</div>
+      </div>
+    </button>
+  `).join('');
+}
+
+async function startPreset(presetId) {
+  activePresetId = presetId;
+  previewTurnIndex = null;
+  pendingUserMessage = null;
+  document.querySelectorAll('.preset-card').forEach(el => el.classList.remove('active'));
+  const active = document.getElementById('preset-' + presetId);
+  if (active) active.classList.add('active');
+  setLoading(true, '正在初始化人像与露齿检测...');
+  try {
+    currentSession = await api('/api/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({preset_id: presetId})
+    });
+    sessionCounter += 1;
+    document.getElementById('artworkTitle').value = `人像习作 · No.${String(sessionCounter).padStart(2, '0')}`;
+    updatePortraitPalette(currentSession.original_url);
+    renderAll(false);
+  } catch (err) {
+    alert('启动会话失败：' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+document.getElementById('uploadInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  activePresetId = null;
+  previewTurnIndex = null;
+  pendingUserMessage = null;
+  document.querySelectorAll('.preset-card').forEach(el => el.classList.remove('active'));
+  setLoading(true, '正在上传并分析单人人像...');
+  try {
+    const up = await api('/api/upload', {method: 'POST', body: file});
+    currentSession = await api('/api/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({image_id: up.image_id})
+    });
+    sessionCounter += 1;
+    document.getElementById('artworkTitle').value = `自拍底片 · No.${String(sessionCounter).padStart(2, '0')}`;
+    updatePortraitPalette(currentSession.original_url);
+    renderAll(false);
+  } catch (err) {
+    alert('上传失败：' + err.message);
+  } finally {
+    e.target.value = '';
+    setLoading(false);
+  }
+});
+
+function submitInput() {
+  const input = document.getElementById('instructionInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendInstruction(text);
+}
+
+document.getElementById('instructionInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    submitInput();
+  }
+});
+
+async function sendInstruction(text) {
+  if (!currentSession) return;
+  const snap = getViewedSnapshot();
+  const body = {instruction: text};
+  const isForking = Boolean(snap && snap.isHistory);
+  if (isForking) {
+    body.parent_id = snap.turnNum === 0 ? null : (snap.turnObj ? snap.turnObj.id : undefined);
+  }
+  previewTurnIndex = null;
+  pendingUserMessage = text;
+  renderChat(true);
+  setLoading(true, (isForking ? '正在从历史节点分叉执行：' : '正在理解并重渲染：') + text);
+  try {
+    currentSession = await api(`/api/sessions/${currentSession.session_id}/turn`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    pendingUserMessage = null;
+    renderAll(true);
+  } catch (err) {
+    pendingUserMessage = null;
+    renderChat(false);
+    alert('执行失败：' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function switchBranch(leafId) {
+  if (!currentSession) return;
+  previewTurnIndex = null;
+  setLoading(true, '正在切换修图方案分支...');
+  try {
+    currentSession = await api(`/api/sessions/${currentSession.session_id}/branch`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({leaf_id: leafId})
+    });
+    renderAll(true);
+  } catch (err) {
+    alert('切换分支失败：' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function returnToLatest() {
+  if (!currentSession) return;
+  selectHistoryTurn(currentSession.turn);
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  ['slider', 'side', 'result'].forEach(m => {
+    const id = m === 'slider' ? 'modeSlider' : (m === 'side' ? 'modeSide' : 'modeResult');
+    document.getElementById(id).classList.toggle('active', m === mode);
+  });
+  syncSegThumb();
+  renderViewer(false);
+}
+
+function toggleLoupe() {
+  loupeEnabled = !loupeEnabled;
+  document.getElementById('btnLoupe').classList.toggle('toggled', loupeEnabled);
+  renderViewer(false);
+}
+
+function setHoldOriginal(active) {
+  if (!currentSession || holdingOriginal === active) return;
+  holdingOriginal = active;
+  document.getElementById('btnHoldOrig').classList.toggle('pressed', active);
+  document.getElementById('holdBadge').classList.toggle('show', active);
+  const ov = document.getElementById('compareOverlay');
+  if (ov) {
+    ov.style.clipPath = active ? 'inset(0 0% 0 0)' : `inset(0 ${100 - sliderPos}% 0 0)`;
+  } else {
+    renderViewer(false);
+  }
+}
+
+const holdBtn = document.getElementById('btnHoldOrig');
+holdBtn.addEventListener('pointerdown', () => setHoldOriginal(true));
+holdBtn.addEventListener('pointerup', () => setHoldOriginal(false));
+holdBtn.addEventListener('pointerleave', () => setHoldOriginal(false));
+
+window.addEventListener('keydown', (e) => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.code === 'Space' && currentSession) {
+    e.preventDefault();
+    setHoldOriginal(true);
+  } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && currentSession && currentSession.can_undo) {
+    e.preventDefault();
+    sendInstruction('撤销上一轮');
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') setHoldOriginal(false);
+});
+
+function updateSlider(val) {
+  sliderPos = Number(val);
+  const overlay = document.getElementById('compareOverlay');
+  const divider = document.getElementById('compareDivider');
+  const handle = document.getElementById('compareHandle');
+  if (overlay && !holdingOriginal) overlay.style.clipPath = `inset(0 ${100 - sliderPos}% 0 0)`;
+  if (divider) divider.style.left = sliderPos + '%';
+  if (handle) handle.style.left = sliderPos + '%';
+}
+
+function getViewedSnapshot() {
+  if (!currentSession) return null;
+  const turns = currentSession.turns || [];
+  if (previewTurnIndex === 0) {
+    return {
+      turnNum: 0,
+      isHistory: turns.length > 0,
+      imageUrl: currentSession.original_url,
+      state: Object.fromEntries((currentSession.tools || []).map(t => [t.id, {enabled: false, [t.param]: t.id === 'remove_acne' ? 0.5 : 0}])),
+      stateBefore: null,
+      turnObj: null
+    };
+  }
+  const targetTurn = previewTurnIndex != null
+    ? turns.find(t => t.turn === previewTurnIndex)
+    : turns[turns.length - 1];
+  if (!targetTurn) {
+    return {
+      turnNum: 0,
+      isHistory: false,
+      imageUrl: currentSession.current_url,
+      state: currentSession.state,
+      stateBefore: null,
+      turnObj: null
+    };
+  }
+  let img = currentSession.original_url;
+  for (const t of turns) {
+    if (t.image_url) img = t.image_url;
+    if (t.turn === targetTurn.turn) break;
+  }
+  return {
+    turnNum: targetTurn.turn,
+    isHistory: previewTurnIndex != null && targetTurn.turn !== currentSession.turn,
+    imageUrl: img + '?t=' + targetTurn.turn,
+    state: targetTurn.state_after || currentSession.state,
+    stateBefore: targetTurn.state_before || null,
+    turnObj: targetTurn
+  };
+}
+
+function bindLoupe(wrap, origUrl, resUrl) {
+  if (!loupeEnabled || !wrap) return;
+  const lens = wrap.querySelector('.loupe-lens');
+  const img = wrap.querySelector('img');
+  if (!lens || !img) return;
+  const leftHalf = lens.querySelector('.loupe-left');
+  const rightHalf = lens.querySelector('.loupe-right');
+  const zoom = 2.5;
+  leftHalf.style.backgroundImage = `url("${origUrl}")`;
+  rightHalf.style.backgroundImage = `url("${resUrl}")`;
+
+  wrap.addEventListener('pointermove', (e) => {
+    const rect = img.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+      lens.style.display = 'none';
+      return;
+    }
+    lens.style.display = 'block';
+    lens.style.left = x + 'px';
+    lens.style.top = y + 'px';
+    const bw = rect.width * zoom;
+    const bh = rect.height * zoom;
+    const r = lens.offsetWidth / 2;
+    const bgY = -(y * zoom - r);
+    leftHalf.style.backgroundSize = `${bw}px ${bh}px`;
+    rightHalf.style.backgroundSize = `${bw}px ${bh}px`;
+    leftHalf.style.backgroundPosition = `${-(x * zoom - r)}px ${bgY}px`;
+    rightHalf.style.backgroundPosition = `${-(x * zoom)}px ${bgY}px`;
+  });
+  wrap.addEventListener('pointerleave', () => { lens.style.display = 'none'; });
+}
+
+function renderViewer(animate = false) {
+  const empty = document.getElementById('emptyState');
+  const content = document.getElementById('viewerContent');
+  const snap = getViewedSnapshot();
+  if (!snap) {
+    empty.style.display = 'block';
+    content.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  content.style.display = 'block';
+  const orig = currentSession.original_url;
+  const curr = holdingOriginal && viewMode !== 'slider' ? orig : snap.imageUrl;
+  const label = snap.turnNum === 0 ? '原图' : `第 ${snap.turnNum} 轮${snap.isHistory ? '（历史回看）' : ''}`;
+  const animCls = animate ? 'reveal-anim' : '';
+
+  if (viewMode === 'slider') {
+    const clipPct = holdingOriginal ? 0 : (100 - sliderPos);
+    content.innerHTML = `
+      <div class="compare-wrap ${animCls} ${loupeEnabled ? 'loupe-active' : ''}" id="activeCompareWrap">
+        <div class="compare-media">
+          <img src="${esc(snap.imageUrl)}" alt="结果图">
+          <div class="compare-overlay" id="compareOverlay" style="clip-path:inset(0 ${clipPct}% 0 0)">
+            <img src="${esc(orig)}" alt="原图">
+          </div>
+          <div class="compare-divider" id="compareDivider" style="left:${sliderPos}%"></div>
+          <div class="loupe-lens">
+            <div class="loupe-half loupe-left"></div>
+            <div class="loupe-half loupe-right"></div>
+            <span class="loupe-cap l">原图 2.5×</span>
+            <span class="loupe-cap r">结果 2.5×</span>
+          </div>
+          <span class="corner-tag left">原图</span>
+          <span class="corner-tag right">${esc(label)}</span>
+        </div>
+        <div class="compare-handle" id="compareHandle" style="left:${sliderPos}%">⇆</div>
+        <input class="compare-range" type="range" min="0" max="100" value="${sliderPos}" oninput="updateSlider(this.value)">
+      </div>`;
+    bindLoupe(document.getElementById('activeCompareWrap'), orig, snap.imageUrl);
+  } else if (viewMode === 'side') {
+    content.innerHTML = `
+      <div class="side-by-side ${animCls}">
+        <figure><img src="${esc(orig)}" alt="原图"><figcaption>原图</figcaption></figure>
+        <figure><img src="${esc(curr)}" alt="结果"><figcaption>${esc(label)}</figcaption></figure>
+      </div>`;
+  } else {
+    content.innerHTML = `
+      <div class="compare-wrap ${animCls} ${loupeEnabled ? 'loupe-active' : ''}" id="activePureWrap">
+        <div class="compare-media">
+          <img src="${esc(curr)}" alt="结果图">
+          <div class="loupe-lens">
+            <div class="loupe-half loupe-left"></div>
+            <div class="loupe-half loupe-right"></div>
+            <span class="loupe-cap l">原图 2.5×</span>
+            <span class="loupe-cap r">结果 2.5×</span>
+          </div>
+          <span class="corner-tag right">${esc(holdingOriginal ? '原图预览' : label)}</span>
+        </div>
+      </div>`;
+    bindLoupe(document.getElementById('activePureWrap'), orig, snap.imageUrl);
+  }
+}
+
+function renderState(state, tools, stateBefore, skippedList) {
+  const skippedTools = new Set((skippedList || []).map(x => x.tool));
+  document.getElementById('statePanel').innerHTML = (tools || []).map(t => {
+    const item = state ? state[t.id] : {enabled: false, [t.param]: 0};
+    const prev = stateBefore ? stateBefore[t.id] : null;
+    const val = item ? Number(item[t.param] ?? 0) : 0;
+    const on = Boolean(item && item.enabled);
+    const pct = Math.round(val * 100);
+    const isSkip = skippedTools.has(t.id);
+
+    let deltaHtml = '';
+    let changed = false;
+    if (isSkip) {
+      deltaHtml = `<span class="delta-pill skip">闭嘴跳过</span>`;
+    } else if (prev && (prev.enabled !== on || Number(prev[t.param] ?? 0) !== val)) {
+      changed = true;
+      const pv = Number(prev[t.param] ?? 0);
+      if (!prev.enabled && on) deltaHtml = `<span class="delta-pill up">+${val.toFixed(1)}</span>`;
+      else if (prev.enabled && !on) deltaHtml = `<span class="delta-pill off">已关</span>`;
+      else deltaHtml = `<span class="delta-pill up">${pv.toFixed(1)}→${val.toFixed(1)}</span>`;
+    }
+
+    return `
+      <div class="tool-tile ${on ? 'on' : ''} ${changed ? 'changed' : ''} ${isSkip ? 'skipped' : ''}" title="${esc(t.desc)}">
+        <div class="tool-top">
+          <span>${esc(t.label)}</span>
+          <span class="tool-val">${on ? val.toFixed(1) : '关'}</span>
+        </div>
+        <div class="track"><div class="fill" style="width:${on ? Math.max(pct, 8) : 0}%"></div></div>
+        ${deltaHtml}
+      </div>`;
+  }).join('');
+}
+
+function selectHistoryTurn(turnNum) {
+  previewTurnIndex = (turnNum === currentSession.turn) ? null : turnNum;
+  renderAll(false);
+}
+
+function renderFilmstripAndTelemetry() {
+  const footer = document.getElementById('stageFooter');
+  if (!currentSession) { footer.style.display = 'none'; return; }
+  footer.style.display = 'flex';
+
+  const branchBar = document.getElementById('branchBar');
+  const branches = currentSession.branches || [];
+  if (branches.length > 1) {
+    branchBar.style.display = 'flex';
+    branchBar.innerHTML = `<span style="font-size:11px;color:var(--ink-muted);font-weight:600;flex-shrink:0;">方案分支：</span>` +
+      branches.map((b, idx) => {
+        const label = String.fromCharCode(65 + idx);
+        const txt = (b.instruction || '').length > 8 ? b.instruction.slice(0, 8) + '…' : (b.instruction || '分支');
+        return `<button class="film-pill ${b.is_active ? 'active' : ''}" onclick="switchBranch('${esc(b.id)}')"><span>⎇ 方案 ${label} · ${esc(txt)}</span></button>`;
+      }).join('');
+  } else {
+    branchBar.style.display = 'none';
+  }
+
+  const snap = getViewedSnapshot();
+  const turns = currentSession.turns || [];
+  let lastImg = currentSession.original_url;
+  const pills = [`
+    <button class="film-pill ${snap.turnNum === 0 ? 'active' : ''}" onclick="selectHistoryTurn(0)">
+      <img src="${esc(currentSession.original_url)}" alt="原图">
+      <span>原图</span>
+    </button>`];
+  for (const t of turns) {
+    if (t.image_url) lastImg = t.image_url;
+    const shortTxt = t.instruction.length > 7 ? t.instruction.slice(0, 7) + '…' : t.instruction;
+    pills.push(`
+      <button class="film-pill ${snap.turnNum === t.turn ? 'active' : ''}" onclick="selectHistoryTurn(${t.turn})" title="${esc(t.instruction)}">
+        <img src="${esc(lastImg)}" alt="T${t.turn}">
+        <span>#${t.turn} ${esc(shortTxt)}</span>
+      </button>`);
+  }
+  document.getElementById('filmstrip').innerHTML = pills.join('');
+
+  const tObj = snap.turnObj;
+  const bar = document.getElementById('telemetryBar');
+  if (!tObj) {
+    bar.innerHTML = `
+      <div class="pipe-steps">
+        <span class="pipe-chip done">人像分析完成 ${currentSession.init_seconds ?? '-'}s</span>
+        <span>等待指令</span>
+      </div>
+      <span style="color:var(--ink-muted)">Lumina · 原图重渲染</span>`;
+  } else {
+    const planMs = tObj.plan_seconds != null ? `${tObj.plan_seconds}s` : '-';
+    const renMs = tObj.render_seconds != null ? `${tObj.render_seconds}s` : '无需重渲';
+    const gateChip = (tObj.skipped && tObj.skipped.length)
+      ? `<span class="pipe-chip warn">② 露齿门控跳过</span>`
+      : `<span class="pipe-chip done">② 结构校验通过</span>`;
+    bar.innerHTML = `
+      <div class="pipe-steps">
+        <span class="pipe-chip done">① VLM 规划 ${planMs}</span>→
+        ${gateChip}→
+        <span class="pipe-chip ${tObj.status === 'rendered' ? 'done' : 'warn'}">③ 像素渲染 ${renMs}</span>
+      </div>
+      ${snap.isHistory ? `<button class="liquid-btn sm" style="padding:3px 10px;font-size:11px;" onclick="returnToLatest()"><span>返回最新轮</span></button>` : `<span style="color:var(--ink-muted)">第 ${tObj.turn} 轮 · ${esc(tObj.status)}</span>`}`;
+  }
+}
+
+function renderChips() {
+  const box = document.getElementById('promptChips');
+  const preset = presetsCache.find(p => p.id === activePresetId);
+  const prompts = preset ? preset.suggested_prompts : [
+    '帮我美白牙齿', '瘦脸强度调到 0.4', '来点大眼', '背景虚化调到 0.5', '撤销上一轮'
+  ];
+  box.innerHTML = prompts.map(p => `<button class="liquid-btn chip" onclick="sendInstruction('${esc(p)}')"><span>${esc(p)}</span></button>`).join('');
+}
+
+// Build natural, strictly factual Gemini-style assistant text from structured turn diff
+function composeAssistantReply(t) {
+  if (t.status === 'clarify') {
+    return { cls: 'warn-text', text: t.question || '请补充一下你想调整的具体项目或程度。' };
+  }
+  if (t.status === 'rejected') {
+    return { cls: 'err-text', text: '这轮未能执行：' + (t.reason || '结构校验未通过') };
+  }
+  const action = (t.effective_plan || t.plan || {}).action;
+  if (action === 'undo') {
+    return { cls: '', text: '好的，已为你撤销上一步，并基于原图恢复到了之前的修图状态。' };
+  }
+  if (action === 'reset') {
+    return { cls: '', text: '已为你恢复到最初的原图状态，所有修图参数都已归零。' };
+  }
+  const changes = [];
+  const before = t.state_before || {};
+  const after = t.state_after || {};
+  for (const [k, label] of Object.entries(TOOL_LABELS)) {
+    const b = before[k] || {}, a = after[k] || {};
+    const p = k === 'remove_acne' ? 'sensitivity' : 'strength';
+    const bv = Number(b[p] ?? 0), av = Number(a[p] ?? 0);
+    if (b.enabled !== a.enabled || bv !== av) {
+      if (!b.enabled && a.enabled) changes.push(`${label}开启至 ${av.toFixed(1)}`);
+      else if (b.enabled && !a.enabled) changes.push(`关闭${label}`);
+      else changes.push(`${label}从 ${bv.toFixed(1)} 调至 ${av.toFixed(1)}`);
+    }
+  }
+  let text = changes.length
+    ? `已为你完成本轮调整：${changes.join('，')}；其余设置保持原值。`
+    : '已完成本轮重渲染，当前修图参数没有变化。';
+  if (t.skipped && t.skipped.length) {
+    text += '（注：未确认到可处理的露齿区域，牙齿美白已自动跳过。）';
+  }
+  return { cls: '', text };
+}
+
+function renderChat(autoScroll = true) {
+  const stream = document.getElementById('chatStream');
+  const sub = document.getElementById('chatSub');
+  const pill = document.getElementById('turnCountPill');
+
+  if (!currentSession) {
+    sub.textContent = '请先在左侧选择或上传照片';
+    pill.textContent = '待开始';
+    return;
+  }
+
+  const turns = currentSession.turns || [];
+  const snap = getViewedSnapshot();
+  const teethOk = currentSession.teeth_target ? Boolean(currentSession.teeth_target.eligible) : null;
+  sub.textContent = teethOk === false ? '已分析人像 · 闭嘴照片（美白自动门控）' : '已分析单人人像 · 随时对话微调';
+  pill.textContent = turns.length ? `共 ${turns.length} 轮` : '已就绪';
+
+  const blocks = [];
+  // Gemini-style session greeting bubble
+  const greetExtra = teethOk === false
+    ? '检测到当前照片为<strong>闭嘴状态</strong>，如果请求牙齿美白我会自动跳过并保留其他效果。'
+    : '已完成单人人像与露齿区域分析，六项工具全部就绪。';
+  blocks.push(`
+    <div class="msg-ai-row static-msg">
+      <div class="spark-avatar sm">✦</div>
+      <div class="msg-ai-body">
+        <div class="msg-ai-text">照片已准备好了！${greetExtra} 直接告诉我你想怎么调整，或点下方快捷建议试试。</div>
+      </div>
+    </div>`);
+
+  // Chronological conversation (oldest -> newest, just like Gemini!)
+  for (const t of turns) {
+    const reply = composeAssistantReply(t);
+    const isInspecting = Boolean(snap && snap.turnNum === t.turn);
+    const pills = [];
+    if (t.status === 'rendered') pills.push(`<span class="mini-pill ok">✓ 已渲染</span>`);
+    else if (t.status === 'clarify') pills.push(`<span class="mini-pill warn">? 澄清 / 跳过</span>`);
+    else pills.push(`<span class="mini-pill bad">✕ 未执行</span>`);
+
+    if (t.applied && t.applied.length) {
+      pills.push(`<span class="mini-pill">${esc(t.applied.join(' · '))}</span>`);
+    }
+    if (t.skipped && t.skipped.length) {
+      pills.push(`<span class="mini-pill warn">跳过 ${esc(t.skipped.map(x => TOOL_LABELS[x.tool] || x.tool).join(','))}</span>`);
+    }
+    if (t.plan_seconds != null) {
+      pills.push(`<span class="mini-pill">规划 ${t.plan_seconds}s${t.render_seconds ? ` · 渲染 ${t.render_seconds}s` : ''}</span>`);
+    }
+
+    blocks.push(`
+      <div class="msg-user-row">
+        <div class="msg-user-bubble">${esc(t.instruction)}</div>
+      </div>
+      <div class="msg-ai-row ${isInspecting ? 'inspecting' : ''}" onclick="selectHistoryTurn(${t.turn})" title="点击在左侧画布查看第 ${t.turn} 轮效果">
+        <div class="spark-avatar sm">✦</div>
+        <div class="msg-ai-body">
+          <div class="msg-ai-text ${reply.cls}">${esc(reply.text)}</div>
+          <div class="msg-chips">${pills.join('')}</div>
+          <details class="audit-toggle" onclick="event.stopPropagation()">
+            <summary>第 ${t.turn} 轮原始 JSON 计划 ▾</summary>
+            <pre class="audit-pre">${esc(JSON.stringify(t.plan, null, 2))}</pre>
+          </details>
+        </div>
+      </div>`);
+  }
+
+  // Optimistic pending user bubble + Lumina thinking indicator
+  if (pendingUserMessage) {
+    blocks.push(`
+      <div class="msg-user-row">
+        <div class="msg-user-bubble">${esc(pendingUserMessage)}</div>
+      </div>
+      <div class="msg-ai-row static-msg">
+        <div class="spark-avatar sm">✦</div>
+        <div class="msg-ai-body">
+          <div class="msg-ai-text" style="color:var(--ink-soft);">
+            正在理解你的修图意图并基于原图重渲染<span class="thinking-dots"><i></i><i></i><i></i></span>
+          </div>
+        </div>
+      </div>`);
+  }
+
+  stream.innerHTML = blocks.join('');
+  if (autoScroll) {
+    stream.scrollTop = stream.scrollHeight;
+  }
+}
+
+function renderAll(animate = false) {
+  const snap = getViewedSnapshot();
+  renderViewer(animate);
+  renderFilmstripAndTelemetry();
+  renderState(snap.state, currentSession.tools, snap.stateBefore, snap.turnObj ? snap.turnObj.skipped : []);
+  renderChips();
+  renderChat(animate || !snap.isHistory);
+
+  const hint = document.getElementById('historyHint');
+  const bHint = document.getElementById('branchHint');
+  if (snap.isHistory) {
+    hint.style.display = 'inline';
+    hint.textContent = `回看第 ${snap.turnNum} 轮`;
+    bHint.classList.add('show');
+    document.getElementById('branchHintText').textContent = `⎇ 发送新消息将从第 ${snap.turnNum} 轮原地分叉新方案`;
+  } else {
+    hint.style.display = 'none';
+    bHint.classList.remove('show');
+  }
+
+  const teethInfo = document.getElementById('infoTeeth');
+  if (teethInfo && currentSession.teeth_target) {
+    const ok = Boolean(currentSession.teeth_target.eligible);
+    teethInfo.textContent = ok ? '已确认露齿 · 可美白' : '闭嘴状态 · 自动跳过美白';
+  }
+}
+
+// One-click Portfolio Showcase Comparison Card Export (Pure Canvas)
+function loadImg(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+async function exportShowcaseCard() {
+  const snap = getViewedSnapshot();
+  if (!snap) return;
+  try {
+    const [origImg, resImg] = await Promise.all([loadImg(currentSession.original_url), loadImg(snap.imageUrl)]);
+    const pad = 42, gap = 24, headerH = 74, footerH = 92;
+    const slotW = 540;
+    const aspect = origImg.naturalHeight / origImg.naturalWidth;
+    const slotH = Math.min(680, Math.round(slotW * aspect));
+    const W = pad * 2 + slotW * 2 + gap;
+    const H = headerH + slotH + footerH + pad;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, '#f8fbff');
+    grad.addColorStop(1, '#eef3fa');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    const artTitle = (document.getElementById('artworkTitle') && document.getElementById('artworkTitle').value.trim()) || 'Lumina 人像习作';
+    ctx.fillStyle = '#141923';
+    ctx.font = '600 24px Georgia, "Songti SC", "Noto Serif SC", serif';
+    ctx.fillText('Lumina', pad, 46);
+    ctx.fillStyle = '#6b7892';
+    ctx.font = '500 15px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+    ctx.fillText(`拾光人像画室  ·  ${artTitle}`, pad + 104, 45);
+
+    [origImg, resImg].forEach((im, idx) => {
+      const x = pad + idx * (slotW + gap);
+      const y = headerH;
+      ctx.save();
+      roundRectPath(ctx, x, y, slotW, slotH, 18);
+      ctx.clip();
+      ctx.drawImage(im, x, y, slotW, slotH);
+      ctx.restore();
+      const lbl = idx === 0 ? '原图 Original' : `结果 Result · 第 ${snap.turnNum} 轮`;
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      roundRectPath(ctx, x + 14, y + slotH - 42, idx === 0 ? 124 : 180, 28, 14);
+      ctx.fill();
+      ctx.fillStyle = '#141923';
+      ctx.font = '600 13px -apple-system, "PingFang SC", sans-serif';
+      ctx.fillText(lbl, x + 26, y + slotH - 23);
+    });
+
+    const fy = headerH + slotH + 34;
+    const instr = snap.turnObj ? `指令：「${snap.turnObj.instruction}」` : '初始原图状态';
+    ctx.fillStyle = '#141923';
+    ctx.font = '600 17px -apple-system, "PingFang SC", sans-serif';
+    ctx.fillText(instr, pad, fy);
+
+    const activeStr = (currentSession.tools || [])
+      .filter(t => snap.state[t.id] && snap.state[t.id].enabled)
+      .map(t => `${t.label} ${Number(snap.state[t.id][t.param]).toFixed(1)}`)
+      .join('  ·  ') || '无开启修图效果（原图）';
+    ctx.fillStyle = '#3678ff';
+    ctx.font = '600 14px -apple-system, "PingFang SC", sans-serif';
+    ctx.fillText('当前参数：' + activeStr, pad, fy + 30);
+
+    const a = document.createElement('a');
+    a.download = `lumina_agent_turn_${snap.turnNum}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  } catch (err) {
+    alert('导出对比卡失败：' + err.message);
+  }
+}
+
+boot().catch(err => {
+  const el = document.getElementById('infoEngine');
+  if (el) el.textContent = '服务未连接：' + err.message;
+});
+</script>
+</body>
+</html>
